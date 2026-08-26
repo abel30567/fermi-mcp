@@ -1,0 +1,8 @@
+{
+	"name": "@fermi/widgets",
+	"private": true,
+	"type": "module",
+	"devDependencies": {
+		"vite": "^6.3.0"
+	}
+}

@@ -1,0 +1,21 @@
+{
+	"name": "fermi",
+	"private": true,
+	"type": "module",
+	"workspaces": ["packages/*"],
+	"scripts": {
+		"dev": "bun run --cwd packages/worker dev",
+		"build": "bun run --cwd packages/worker build",
+		"test": "bun run --cwd packages/worker test",
+		"check": "biome check .",
+		"format": "biome format --write .",
+		"migrate:local": "wrangler d1 migrations apply FERMI_DB --local --config packages/worker/wrangler.jsonc",
+		"migrate:remote": "wrangler d1 migrations apply FERMI_DB --remote --config packages/worker/wrangler.jsonc"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.0",
+		"@cloudflare/workers-types": "^4.20250525.0",
+		"typescript": "^5.8.3",
+		"wrangler": "^4.14.0"
+	}
+}

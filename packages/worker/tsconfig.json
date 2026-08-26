@@ -1,0 +1,21 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ES2022",
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true,
+		"noEmit": true,
+		"types": ["@cloudflare/workers-types"],
+		"lib": ["ES2022"],
+		"composite": true,
+		"rootDir": "./src",
+		"outDir": "./dist"
+	},
+	"include": ["src/**/*.ts", "worker-configuration.d.ts"],
+	"exclude": ["node_modules", "dist"]
+}

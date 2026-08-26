@@ -1,0 +1,45 @@
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "__WORKER_NAME__",
+	"compatibility_date": "2026-04-28",
+	"compatibility_flags": ["nodejs_compat"],
+	"main": "./src/index.ts",
+	"rules": [{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true }],
+	"observability": { "enabled": true },
+	"d1_databases": [
+		{
+			"binding": "FERMI_DB",
+			"database_name": "__D1_DATABASE_NAME__",
+			"database_id": "__D1_DATABASE_ID__",
+			"migrations_dir": "./migrations"
+		}
+	],
+	"r2_buckets": [{ "binding": "FERMI_BUCKET", "bucket_name": "__R2_BUCKET_NAME__" }],
+	"kv_namespaces": [
+		{ "binding": "FERMI_KV", "id": "__KV_FERMI_ID__" },
+		{ "binding": "OAUTH_KV", "id": "__KV_OAUTH_ID__" }
+	],
+	"ai": { "binding": "AI" },
+	"browser": { "binding": "MYBROWSER" },
+	"vectorize": [{ "binding": "FERMI_VECTORIZE", "index_name": "__VECTORIZE_INDEX_NAME__" }],
+	"worker_loaders": [{ "binding": "LOADER" }],
+	"services": [
+		{ "binding": "GATEWAY", "service": "__WORKER_NAME__", "entrypoint": "CodemodeFetchGateway" }
+	],
+	"durable_objects": {
+		"bindings": [
+			{ "class_name": "FermiMCP", "name": "MCP_OBJECT" },
+			{ "class_name": "LiveCanvasDO", "name": "CANVAS_DO" },
+			{ "class_name": "SandboxStorageDO", "name": "SANDBOX_STORAGE" },
+			{ "class_name": "BrowserSessionDO", "name": "BROWSER_SESSION" }
+		]
+	},
+	"migrations": [
+		{ "new_sqlite_classes": ["FermiMCP"], "tag": "v1" },
+		{ "new_sqlite_classes": ["LiveCanvasDO"], "tag": "v2" },
+		{ "new_sqlite_classes": ["SandboxStorageDO"], "tag": "v3" },
+		{ "new_sqlite_classes": ["BrowserSessionDO"], "tag": "v4" }
+	],
+	"triggers": { "crons": ["0 3 * * *", "0 8 * * *", "0 2 * * SUN", "0 */6 * * *"] },
+	"vars": { "FERMI_ENV": "development", "CF_ACCOUNT_ID": "__CF_ACCOUNT_ID__" }
+}
