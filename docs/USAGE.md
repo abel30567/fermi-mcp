@@ -46,12 +46,17 @@ Auth is controlled by the `FERMI_AUTH_ENABLED` var (set it in `wrangler.jsonc`
 `vars`, or via `wrangler deploy --var`).
 
 **Open mode (default).** `FERMI_AUTH_ENABLED` unset or not `"true"`. `/mcp` and `/sse`
-are served with no transport authentication. Fine for local development or a network
-you already trust.
+are served with no transport authentication. Only use this with `wrangler dev` locally.
+
+> ⚠️ **A deployed Worker is internet-exposed.** `wrangler deploy` publishes to a
+> public `*.workers.dev` URL, and in open mode anyone who finds that URL gets full,
+> unauthenticated access to every tool — your memories, stored secrets
+> (`secret_resolve`), code execution (`execute`), and browser sessions. Enable OAuth
+> mode before (or immediately after) your first deploy.
 
 **OAuth mode.** `FERMI_AUTH_ENABLED="true"`. The MCP transports are wrapped by an
 OAuth provider; the consent screen validates `FERMI_OWNER_SECRET` (and a TOTP code if
-you've set one up). Use this for any internet-exposed deployment.
+you've set one up). Use this for any deployed instance.
 
 ```bash
 wrangler secret put FERMI_OWNER_SECRET    # owner password for the consent screen

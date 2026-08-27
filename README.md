@@ -99,10 +99,17 @@ chmod +x bootstrap.sh
 ./bootstrap.sh my-instance-name        # provisions D1, R2, KV, Vectorize; writes wrangler.jsonc
 
 cd packages/worker
-wrangler secret put FERMI_SECRETS_KEY  # required: encrypts stored secrets
+wrangler secret put FERMI_SECRETS_KEY   # required: encrypts stored secrets
+wrangler secret put FERMI_OWNER_SECRET  # owner password for the OAuth consent screen
+wrangler secret put FERMI_BEARER_TOKEN  # gates the admin HTTP endpoints
 bun run migrate:remote
-wrangler deploy
+wrangler deploy --var FERMI_AUTH_ENABLED:true
 ```
+
+> ⚠️ Deploy with `FERMI_AUTH_ENABLED:true` (or set it in `wrangler.jsonc` `vars`).
+> Without it the MCP transports are **completely unauthenticated** on a public
+> `workers.dev` URL — anyone who finds it can read your memories, resolve your
+> stored secrets, and run code. Open mode is for `wrangler dev` only.
 
 Then seed the bundled skills and confirm the capability registry:
 
@@ -145,8 +152,10 @@ Secrets are set with `wrangler secret put` (values entered interactively):
 | `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET` | optional | Slack channel |
 | `MACOS_MCP_URL`, `MACOS_MCP_TOKEN` | optional | Local macOS bridge (enables the `mac_*` tools) |
 
-Auth mode is controlled by the `FERMI_AUTH_ENABLED` var. Leave it unset for an open,
-trusted-network deployment; set it to `true` to put the MCP transports behind OAuth.
+Auth mode is controlled by the `FERMI_AUTH_ENABLED` var. Set it to `true` to put the
+MCP transports behind OAuth — recommended for every deployed instance. Leaving it
+unset serves `/mcp` and `/sse` with no authentication, which is only appropriate for
+local `wrangler dev`.
 
 ## Connecting a host
 
