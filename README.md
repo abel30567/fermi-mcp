@@ -157,6 +157,11 @@ MCP transports behind OAuth — recommended for every deployed instance. Leaving
 unset serves `/mcp` and `/sse` with no authentication, which is only appropriate for
 local `wrangler dev`.
 
+In OAuth mode, connecting hosts self-register and land on Fermi's consent screen,
+which validates your owner secret and (once enrolled via `totp_setup`) a TOTP code:
+
+![Fermi OAuth consent screen](docs/images/oauth-consent.png)
+
 ## Connecting a host
 
 ### Claude.ai (web)

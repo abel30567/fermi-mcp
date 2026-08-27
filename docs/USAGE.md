@@ -62,6 +62,14 @@ you've set one up). Use this for any deployed instance.
 wrangler secret put FERMI_OWNER_SECRET    # owner password for the consent screen
 ```
 
+When a host connects (e.g. adding the connector in Claude.ai), it registers itself
+via dynamic client registration (`/oauth/register`) and redirects you to Fermi's
+consent screen. Enter your owner secret — and your authenticator code once TOTP is
+set up via the `totp_setup` tool — and the host receives its tokens automatically.
+No identity provider to configure; this screen *is* the login:
+
+![Fermi OAuth consent screen](images/oauth-consent.png)
+
 Admin HTTP endpoints are always gated by a bearer token, independent of the mode
 above:
 
