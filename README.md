@@ -8,6 +8,7 @@ against the Anthropic API.
 
 One server, one memory, one permission spine — the host changes, the agent doesn't.
 
+> **Full documentation site:** [abel30567.github.io/fermi-mcp](https://abel30567.github.io/fermi-mcp/) — guide, component reference, architecture with data-flow diagrams, use cases, and the build-journey blog. Sources in [`docs-site/`](docs-site/).
 > Architecture in depth: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 > Setup and day-to-day usage: [`docs/USAGE.md`](docs/USAGE.md).
 
