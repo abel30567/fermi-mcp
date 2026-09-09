@@ -257,12 +257,34 @@ describe('task-store queues and leases', () => {
 
 import { countPendingTasks as _cpt, isFleetQueue as _ifq } from '../src/lib/task-store.ts'
 describe('fleet queues isolated from channel drain (2026-09-08 SCA incident)', () => {
-	beforeAll(async () => { await setupTasksSchema() })
-	beforeEach(async () => { await clearTasks() })
+	beforeAll(async () => {
+		await setupTasksSchema()
+	})
+	beforeEach(async () => {
+		await clearTasks()
+	})
 	it('unscoped pending count excludes agent:* and broker:* queues', async () => {
-		await enqueueTask(env.FERMI_DB, { channel: 'wa', sender: 'u', chatId: 'c', payload: '{}', queue: 'default' })
-		await enqueueTask(env.FERMI_DB, { channel: 'cloud', sender: 'x', chatId: 'c', payload: '{}', queue: 'agent:ca_x' })
-		await enqueueTask(env.FERMI_DB, { channel: 'broker', sender: 'x', chatId: 'c', payload: '{}', queue: 'broker:ops' })
+		await enqueueTask(env.FERMI_DB, {
+			channel: 'wa',
+			sender: 'u',
+			chatId: 'c',
+			payload: '{}',
+			queue: 'default',
+		})
+		await enqueueTask(env.FERMI_DB, {
+			channel: 'cloud',
+			sender: 'x',
+			chatId: 'c',
+			payload: '{}',
+			queue: 'agent:ca_x',
+		})
+		await enqueueTask(env.FERMI_DB, {
+			channel: 'broker',
+			sender: 'x',
+			chatId: 'c',
+			payload: '{}',
+			queue: 'broker:ops',
+		})
 		expect(await countPendingTasks(env.FERMI_DB)).toBe(1) // only the default-queue channel task
 		expect(await countPendingTasks(env.FERMI_DB, 'agent:ca_x')).toBe(1) // explicit scope still sees it
 	})
