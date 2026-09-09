@@ -1,6 +1,15 @@
 const HKDF_INFO = new TextEncoder().encode('fermi:secrets:v1')
 const HKDF_SALT = new TextEncoder().encode('fermi-secrets-store')
 
+/** Constant-time string comparison (Workers' non-standard subtle extension). */
+export function timingSafeEqual(a: string, b: string): boolean {
+	const encoder = new TextEncoder()
+	const aBytes = encoder.encode(a)
+	const bBytes = encoder.encode(b)
+	if (aBytes.byteLength !== bBytes.byteLength) return false
+	return crypto.subtle.timingSafeEqual(aBytes, bBytes)
+}
+
 function hexToBytes(hex: string): Uint8Array {
 	if (hex.length % 2 !== 0) throw new Error('FERMI_SECRETS_KEY must be hex')
 	const bytes = new Uint8Array(hex.length / 2)

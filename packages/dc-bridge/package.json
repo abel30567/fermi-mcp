@@ -1,0 +1,19 @@
+{
+	"name": "@fermi/dc-bridge",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=22.18"
+	},
+	"scripts": {
+		"start": "node src/index.ts",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"discord.js": "^14.26"
+	},
+	"devDependencies": {
+		"@types/node": "*",
+		"typescript": "*"
+	}
+}

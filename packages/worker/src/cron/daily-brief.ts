@@ -1,5 +1,6 @@
 import { sendSlackMessage } from '../channels/slack.ts'
 import { sendTelegramMessage } from '../channels/telegram.ts'
+import { sendWhatsAppMessage } from '../channels/whatsapp.ts'
 
 export async function handleDailyBrief(env: Env) {
 	const oneDayAgo = Date.now() - 86_400_000
@@ -51,6 +52,8 @@ export async function handleDailyBrief(env: Env) {
 
 	if (channel === 'tg' && chatId) {
 		await sendTelegramMessage(env, chatId, briefText)
+	} else if (channel === 'wa' && chatId) {
+		await sendWhatsAppMessage(env, chatId, briefText)
 	} else if (channel === 'slack') {
 		const slackChannel = await env.FERMI_KV.get('config:daily_brief:slack_channel')
 		if (slackChannel) {

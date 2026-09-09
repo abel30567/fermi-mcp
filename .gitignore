@@ -3,7 +3,6 @@ node_modules
 dist
 .wrangler
 *.tsbuildinfo
-bun.lock
 *.local
 
 # secrets & local config
