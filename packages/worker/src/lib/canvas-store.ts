@@ -22,9 +22,7 @@ export async function createCanvas(
 ): Promise<{ canvas_id: string; url: string; status: string }> {
 	const canvasId = crypto.randomUUID()
 	const baseUrl =
-		env.FERMI_ENV === 'development'
-			? 'http://localhost:8787'
-			: 'https://fermi.example.workers.dev'
+		env.FERMI_ENV === 'development' ? 'http://localhost:8787' : 'https://fermi.example.workers.dev'
 	await patchCanvas(
 		canvasId,
 		{
