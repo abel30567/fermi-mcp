@@ -25,6 +25,10 @@ declare global {
 		CF_BROWSER_API_TOKEN?: string
 		ANTHROPIC_API_KEY?: string
 		TELEGRAM_BOT_TOKEN?: string
+		TELEGRAM_WEBHOOK_SECRET?: string
+		WA_WEBHOOK_SECRET?: string
+		DISCORD_BOT_TOKEN?: string
+		DISCORD_BRIDGE_SECRET?: string
 		SLACK_BOT_TOKEN?: string
 		SLACK_SIGNING_SECRET?: string
 		MACOS_MCP_URL?: string

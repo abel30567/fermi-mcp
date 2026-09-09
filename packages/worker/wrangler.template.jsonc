@@ -31,15 +31,17 @@
 			{ "class_name": "FermiMCP", "name": "MCP_OBJECT" },
 			{ "class_name": "LiveCanvasDO", "name": "CANVAS_DO" },
 			{ "class_name": "SandboxStorageDO", "name": "SANDBOX_STORAGE" },
-			{ "class_name": "BrowserSessionDO", "name": "BROWSER_SESSION" }
+			{ "class_name": "BrowserSessionDO", "name": "BROWSER_SESSION" },
+			{ "class_name": "FleetDO", "name": "FLEET_DO" }
 		]
 	},
 	"migrations": [
 		{ "new_sqlite_classes": ["FermiMCP"], "tag": "v1" },
 		{ "new_sqlite_classes": ["LiveCanvasDO"], "tag": "v2" },
 		{ "new_sqlite_classes": ["SandboxStorageDO"], "tag": "v3" },
-		{ "new_sqlite_classes": ["BrowserSessionDO"], "tag": "v4" }
+		{ "new_sqlite_classes": ["BrowserSessionDO"], "tag": "v4" },
+		{ "new_sqlite_classes": ["FleetDO"], "tag": "v5" }
 	],
-	"triggers": { "crons": ["0 3 * * *", "0 8 * * *", "0 2 * * SUN", "0 */6 * * *"] },
+	"triggers": { "crons": ["0 3 * * *", "0 8 * * *", "0 2 * * SUN", "0 */6 * * *", "*/5 * * * *"] },
 	"vars": { "FERMI_ENV": "development", "CF_ACCOUNT_ID": "__CF_ACCOUNT_ID__" }
 }

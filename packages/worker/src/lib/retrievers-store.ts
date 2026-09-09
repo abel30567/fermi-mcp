@@ -98,6 +98,24 @@ export async function runRetriever(
 	const r = await getRetriever(name, env)
 	if (!r) throw new Error(`retriever_not_found: ${name}`)
 	const { sql, values } = bindParams(r.sql, params)
+	// Retrievers are READ-ONLY by contract. Guard against writes, but strip
+	// string literals and comments FIRST so a legitimate SELECT that merely
+	// mentions a keyword in a string/comment isn't false-positive-blocked
+	// (#38). After stripping: require a SELECT/WITH prefix AND reject any
+	// data-modifying keyword in the remaining code (blocks WITH..DELETE etc).
+	const scrubbed = sql
+		.replace(/'(?:[^']|'')*'/g, "''") // single-quoted strings
+		.replace(/"(?:[^"]|"")*"/g, '""') // double-quoted identifiers/strings
+		.replace(/--[^\n]*/g, ' ') // line comments
+		.replace(/\/\*[\s\S]*?\*\//g, ' ') // block comments
+	if (
+		!/^\s*(select|with)\b/i.test(scrubbed) ||
+		/\b(insert|update|delete|drop|alter|create|replace|attach|detach|pragma|vacuum|reindex)\b/i.test(
+			scrubbed,
+		)
+	) {
+		throw new Error('retriever_sql_must_be_read_only_select')
+	}
 	const stmt = env.FERMI_DB.prepare(sql)
 	const { results } = await (values.length > 0 ? stmt.bind(...values).all() : stmt.all())
 	return { rows: results, rows_count: results.length }

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { FermiMCP } from '../mcp/index.ts'
 import { executeHooks } from '../orchestration/hooks.ts'
 import { hashArgs, measureResultBytes, writeAudit } from './audit.ts'
+import { isBoxAllowedTool } from './box-scope.ts'
 
 export type ToolScope =
 	| 'read'
@@ -260,6 +261,11 @@ export function defineTool<T extends Record<string, z.ZodType>>(agent: FermiMCP,
 				}
 		}
 	}
+
+	// Box sessions (bearer-token cloud agents) get an ALLOWLIST-only surface:
+	// a leaked box token cannot escalate, move laterally, read the owner's
+	// machine or transcripts, or persist — because those tools never register.
+	if (agent.principal === 'box' && !isBoxAllowedTool(def.name)) return
 
 	// biome-ignore lint/suspicious/noExplicitAny: generic MCP callback bridge
 	agent.server.tool(def.name, def.description, schema, wrappedHandler as any)

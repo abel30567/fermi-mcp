@@ -7,7 +7,10 @@ import { registerTools } from './register-tools.ts'
 type State = { sessionId?: string; mode?: 'chat' | 'plan' | 'execute' }
 type Props = { baseUrl: string }
 
+export { BOX_ALLOWED_TOOLS } from '../lib/box-scope.ts'
+
 export class FermiMCP extends McpAgent<Env, State, Props> {
+	principal: 'owner' | 'box' = 'owner'
 	server = new McpServer(
 		{ name: 'fermi', version: '0.1.0' },
 		{
@@ -26,6 +29,7 @@ export class FermiMCP extends McpAgent<Env, State, Props> {
 
 	async init() {
 		const host = this.props?.baseUrl ?? 'mcp'
+		this.principal = host.startsWith('box:') ? 'box' : 'owner'
 		const sessionId = await createSession(this.env.FERMI_DB, host)
 		this.setState({ ...this.state, sessionId })
 		registerAllCapabilities()

@@ -74,7 +74,7 @@ async function getSessionId(env: Env): Promise<string> {
 	return sessionId
 }
 
-async function callRemoteTool(
+export async function callRemoteTool(
 	env: Env,
 	toolName: string,
 	args: Record<string, unknown>,
