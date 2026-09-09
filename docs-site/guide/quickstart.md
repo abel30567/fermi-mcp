@@ -58,6 +58,7 @@ With `FERMI_AUTH_ENABLED` unset, `/mcp` has **no transport auth**. That is a loc
 - **Claude.ai / Claude Desktop** — add a custom connector pointing at `https://<your-worker>.workers.dev/mcp`; complete the OAuth consent (owner secret + TOTP if configured). Walkthrough with screenshots: [docs/connect-claude-desktop.md](https://github.com/abel30567/fermi-mcp/blob/master/docs/connect-claude-desktop.md).
 - **Claude Code** — `claude mcp add fermi --transport http https://<your-worker>.workers.dev/mcp`.
 - **Cursor / VS Code** — same URL in the MCP settings pane.
+- **ChatGPT** — chatgpt.com/plugins → "+" → New Plugin → name + your `/mcp` URL (auth: OAuth, or None on a trusted deployment). The normal tool surface works; `risk: high` approval-gated tools (like `execute`) don't fit ChatGPT's one-shot tool model — see [Harness dependence](/architecture/harness-dependence).
 
 ## What success looks like
 

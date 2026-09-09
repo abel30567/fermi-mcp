@@ -27,17 +27,23 @@ The roadmap, in order of leverage:
 
 ## The ChatGPT gap
 
-Current state, tested: **Fermi does not work as a ChatGPT connector/plugin.** ChatGPT's connector surface (chatgpt.com/plugins → "+" → New Plugin) expects its own connector schema and auth flow (OAuth default; "None" allowed), and its MCP support does not accept Fermi's streamable-HTTP MCP endpoint as-is. We *have* driven the ChatGPT plugin UI end-to-end with fleet agents (creating third-party connectors like an MCP-backed retail connector, and fanning 60 agents across one) — so the limitation is well-characterized, not speculative:
+Current state, tested: **ChatGPT plugins work with Fermi MCP.** Add the Worker's MCP endpoint as a plugin (chatgpt.com/plugins → "+" → New Plugin → name + server URL; auth OAuth or None) and ChatGPT lists and calls the tool surface — memory, skills, search, tasks, and the rest of the read/write tools behave normally.
 
-- ChatGPT wants a connector manifest + its own tool-listing semantics, not a raw `/mcp` transport.
-- Auth: it will do OAuth against your endpoint, but the consent flow differs from the `workers-oauth-provider` handshake Claude hosts use.
-- Practical path: a thin **ChatGPT-connector façade** on the Worker — a route that translates ChatGPT's connector calls into the internal tool surface, with its own OAuth client registration. The OAuth machinery (`oauth_register_client`, `/oauth/*`) already exists; the missing piece is the translation layer and schema.
+What does *not* carry over is the part of Fermi that assumes a cooperative approval loop:
 
-Until that façade exists, the honest compatibility table is:
+- **`execute` can't be triggered from ChatGPT.** It's `risk: high`, so the guardrail pipeline answers the first call with `pending_approval` plus a single-use token and expects the host to re-issue the call with that token. Claude hosts play this two-step; ChatGPT doesn't — it treats the pending response as the answer and moves on, so the sandbox (and any other approval-gated tool) is effectively unreachable.
+- **Per-request key minting fights ChatGPT's usage model generally.** The mint-token-then-redeem pattern assumes the host will hold state across a denied call and retry deliberately. ChatGPT's connector model wants tools that succeed or fail in one shot.
+
+Practical paths, in order of effort:
+
+1. **Scope-limited client**: register a dedicated OAuth client for ChatGPT and treat it as a read/write-low surface — everything below `risk: high` already just works.
+2. **A ChatGPT-mode approval bridge**: let the approval token be redeemed out-of-band (approve from any Claude host or a channel message) so ChatGPT's *next* identical call finds the gate open, instead of expecting ChatGPT itself to carry the token.
+
+The honest compatibility table:
 
 | Host | Status |
 |------|--------|
-| Claude.ai / Desktop / Code | first-class |
+| Claude.ai / Desktop / Code | first-class, including approval-gated tools |
 | Cursor / VS Code MCP | works (MCP standard) |
-| ChatGPT | **not supported** as a connector today; the fleet can *drive* ChatGPT's UI via the broker, which is a different thing |
+| ChatGPT | **works as a plugin** for the normal tool surface; `execute` and other `risk: high` approval-gated tools unusable from it today |
 | Anything speaking MCP streamable-HTTP | should work; report issues |
