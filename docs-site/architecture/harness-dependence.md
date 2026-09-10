@@ -29,10 +29,13 @@ The roadmap, in order of leverage:
 
 Current state, tested: **ChatGPT plugins work with Fermi MCP.** Add the Worker's MCP endpoint as a plugin (chatgpt.com/plugins → "+" → New Plugin → name + server URL; auth OAuth or None) and ChatGPT lists and calls the tool surface — memory, skills, search, tasks, and the rest of the read/write tools behave normally.
 
-What does *not* carry over is the part of Fermi that assumes a cooperative approval loop:
+What does *not* carry over is the part of Fermi that assumes a cooperative approval loop. We tested this end-to-end (2026-09-10) and the failure is layered:
 
-- **`execute` can't be triggered from ChatGPT.** It's `risk: high`, so the guardrail pipeline answers the first call with `pending_approval` plus a single-use token and expects the host to re-issue the call with that token. Claude hosts play this two-step; ChatGPT doesn't — it treats the pending response as the answer and moves on, so the sandbox (and any other approval-gated tool) is effectively unreachable.
-- **Per-request key minting fights ChatGPT's usage model generally.** The mint-token-then-redeem pattern assumes the host will hold state across a denied call and retry deliberately. ChatGPT's connector model wants tools that succeed or fail in one shot.
+1. **Connector must be attached per chat.** Installed-but-unattached, *every* Fermi tool call — even read-only `search` — comes back "This tool call was blocked by OpenAI's safety checks." Attach Fermi through the composer's "+" menu (Developer mode must be on account-wide) and calls flow, each behind ChatGPT's own Allow once / Always allow consent dialog.
+2. **`execute` reaches Fermi but stalls at the gate.** It's `risk: high`, so the pipeline answers with `pending_approval` plus a single-use token and expects the call re-issued with that token. ChatGPT presents the pending response as the final answer.
+3. **The redeem leg is safety-blocked outright.** Even when explicitly instructed to re-invoke `execute` with the `approval_token`, OpenAI's safety layer blocks that second call. The two-step isn't just unidiomatic for ChatGPT — its client refuses to complete it.
+
+So the mint-token-then-redeem pattern is structurally incompatible with ChatGPT's one-shot tool model, in both directions: ChatGPT won't retry on its own, and is blocked from retrying when asked.
 
 Practical paths, in order of effort:
 
