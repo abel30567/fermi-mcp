@@ -16,6 +16,8 @@ export default defineWorkersConfig({
 						WA_WEBHOOK_SECRET: 'test-wa-secret',
 						DISCORD_BOT_TOKEN: 'test-dc-token',
 						DISCORD_BRIDGE_SECRET: 'test-dc-secret',
+						SLACK_BOT_TOKEN: 'test-sl-token',
+						SLACK_BRIDGE_SECRET: 'test-sl-secret',
 						FERMI_SECRETS_KEY: '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f',
 						FERMI_BEARER_TOKEN: 'test-admin-bearer',
 					},

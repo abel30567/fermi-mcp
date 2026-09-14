@@ -16,7 +16,7 @@ export function registerScheduleTools(agent: FermiMCP) {
 		description:
 			'Register a scheduled job. The prompt is a self-contained runbook (goal, steps, tools to use, state-keeping memory keys, and a delivery condition — when to message vs stay silent); it executes later as a full agent turn with no chat context. Provide exactly one of every_minutes (recurring) or at (one-shot).',
 		schema: {
-			channel: z.enum(['tg', 'wa', 'dc']).describe('Channel whose chat receives any output'),
+			channel: z.enum(['tg', 'wa', 'dc', 'sl']).describe('Channel whose chat receives any output'),
 			chat_id: z.string().describe('Chat id to deliver into (from the current task)'),
 			prompt: z
 				.string()

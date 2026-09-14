@@ -1,0 +1,20 @@
+{
+	"name": "@fermi/sl-bridge",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=22.18"
+	},
+	"scripts": {
+		"start": "node src/index.ts",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@slack/socket-mode": "^2.0.4",
+		"@slack/web-api": "^7.9.3"
+	},
+	"devDependencies": {
+		"@types/node": "*",
+		"typescript": "*"
+	}
+}

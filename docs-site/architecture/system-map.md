@@ -86,7 +86,7 @@ flowchart TB
 | Lane | Model runs on | Billed to |
 |------|---------------|-----------|
 | MCP hosts | the host (Claude.ai, Claude Code…) | your existing subscription |
-| Channels (Telegram etc.) | Worker → Anthropic API | `ANTHROPIC_API_KEY` |
+| Channels (Telegram/Discord/WhatsApp/Slack) | Claude Code on your Mac (daemon drain) | your subscription |
 | Daemon tasks | Claude Code on your Mac | your subscription |
 | Neutrinos | harness on the box, OAuth token | your subscription (tracked as telemetry `inference_usd`, **not** counted against the fleet budget — the budget is EC2 wall-clock only) |
 

@@ -9,7 +9,7 @@ Fermi's *control plane* (the Worker) is harness-agnostic: it speaks MCP, and MCP
 | Lane | What actually runs | Coupling |
 |------|--------------------|----------|
 | MCP hosts | whatever host you connect | none — pure MCP |
-| Channels | Worker-native inference loop (`runAgentTurn`) against the Anthropic API | Anthropic API, not a harness |
+| Channels | same daemon drain as below (`task_claim` → `claude -p` → `channel_send`) | **hard** — same Claude Code CLI |
 | **Daemon** | `claude -p` — the Claude Code CLI in print mode, with `--allowedTools` | **hard** |
 | **Neutrinos** | `box-runner.mjs` spawns a harness by `route`: `claude` (Claude Code CLI), `codex` (Codex CLI), `grok` (Grok CLI) | **moderate** — three routes exist, but the runner's assumptions (flags, output framing, OAuth token env var, settings files) are Claude-Code-shaped, and `claude` is the only route with heavy mileage |
 

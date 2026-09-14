@@ -282,20 +282,26 @@ channels. Concurrency is capped (default 3).
 
 ---
 
-## 6. Channels (Telegram / Slack)
+## 6. Channels (Telegram / Discord / WhatsApp / Slack)
 
-Channels let you talk to the agent with no MCP host attached — Fermi runs its own
-inference loop, so you need an Anthropic key:
+Channels let you talk to the agent with no MCP host attached. Inbound messages
+enqueue onto a D1 task queue; a Mac-local daemon drains them (`task_claim` →
+work → `channel_send`). Slack is a Socket Mode bridge (`packages/sl-bridge`),
+not an in-worker inference loop.
 
 ```bash
-wrangler secret put ANTHROPIC_API_KEY
-wrangler secret put TELEGRAM_BOT_TOKEN          # Telegram
-wrangler secret put SLACK_BOT_TOKEN             # Slack
-wrangler secret put SLACK_SIGNING_SECRET
+wrangler secret put TELEGRAM_BOT_TOKEN
+wrangler secret put TELEGRAM_WEBHOOK_SECRET
+wrangler secret put DISCORD_BOT_TOKEN
+wrangler secret put DISCORD_BRIDGE_SECRET
+wrangler secret put SLACK_BOT_TOKEN
+wrangler secret put SLACK_BRIDGE_SECRET
+wrangler secret put WA_WEBHOOK_SECRET
 ```
 
-Point the bot's webhook at `https://<worker>/tg/webhook` (Telegram) or configure
-Slack events at `https://<worker>/slack/events`.
+Telegram POSTs to `https://<worker>/tg/webhook`. Discord and Slack bridges POST
+to `/dc/webhook` and `/sl/webhook`. See [`packages/sl-bridge/README.md`](../packages/sl-bridge/README.md)
+for the Slack app (Socket Mode + `xapp-` token on the daemon).
 
 The daily brief posts to whichever channel is configured in KV
 (`config:daily_brief:channel`, `config:daily_brief:chat_id`, and for Slack

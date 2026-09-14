@@ -9,8 +9,8 @@
 Fermi is a single [MCP](https://modelcontextprotocol.io) server that runs on
 Cloudflare Workers. It exposes one tool surface, one memory store, and one
 permission model to every connected host — Claude.ai, Claude Desktop, Claude Code,
-Cursor, ChatGPT — and, for unattended channels (Telegram, Slack), runs its own
-inference loop against the Anthropic API.
+Cursor, ChatGPT — and unattended channels (Telegram, Discord, WhatsApp, Slack)
+that enqueue onto a D1 task queue drained by a Mac-local daemon.
 
 The repository is a Bun monorepo:
 
@@ -23,7 +23,7 @@ packages/
       mcp/                # MCP tool registration (host-facing surface)
       capabilities/       # sandbox capability registry (codemode surface)
       orchestration/      # hooks, plan mode, team_spawn
-      channels/           # telegram, slack, anthropic inference loop
+      channels/           # telegram, discord, whatsapp, slack gateways
       cron/               # scheduled jobs
       do/                 # Durable Objects
       lib/                # stores, crypto, search fusion, audit, embeddings
@@ -354,10 +354,12 @@ provide.
 
 ## Channels and subagents
 
-**Telegram / Slack** (`src/channels/`). Webhooks land at `/tg/webhook` and
-`/slack/events`. Because no host is driving inference, these channels run their own
-loop, `runAgentTurn` (`src/channels/inference.ts`), against the Anthropic API
-(`ANTHROPIC_API_KEY`).
+**Telegram / Discord / WhatsApp / Slack** (`src/channels/`). Webhooks land at
+`/tg/webhook`, `/dc/webhook`, `/wa/webhook`, and `/sl/webhook`. Each allowlists,
+pairs unknown DMs, logs the turn, and enqueues a D1 task. A Mac-local daemon
+drains the queue and replies with `channel_send`. Slack's Socket Mode client
+lives in `packages/sl-bridge` (receive-only); the Worker sends via
+`chat.postMessage`. `/slack/events` remains only for Slack url_verification.
 
 **`team_spawn`** (`src/orchestration/team-spawn.ts`). Spawns a subagent that runs the
 same `runAgentTurn` loop with a role-specific system prompt

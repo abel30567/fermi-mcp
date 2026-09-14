@@ -7,9 +7,9 @@ export function registerAllowlistTools(agent: FermiMCP) {
 	defineTool(agent, {
 		name: 'allowlist_add',
 		description:
-			'Allow a sender to use a channel (tg/wa/dc) without pairing. Idempotent — re-adding refreshes the entry. See allowlist_list for usage stats.',
+			'Allow a sender to use a channel (tg/wa/dc/sl) without pairing. Idempotent — re-adding refreshes the entry. See allowlist_list for usage stats.',
 		schema: {
-			channel: z.enum(['tg', 'wa', 'dc']).describe('Channel the sender belongs to'),
+			channel: z.enum(['tg', 'wa', 'dc', 'sl']).describe('Channel the sender belongs to'),
 			sender_id: z.string().describe('Channel-specific sender id'),
 			note: z.string().optional().describe('Optional label, e.g. "guest" or a name'),
 		},
@@ -32,7 +32,7 @@ export function registerAllowlistTools(agent: FermiMCP) {
 		description:
 			'Remove a sender from a channel allowlist. Returns not_found when the sender was not allowlisted.',
 		schema: {
-			channel: z.enum(['tg', 'wa', 'dc']).describe('Channel the sender belongs to'),
+			channel: z.enum(['tg', 'wa', 'dc', 'sl']).describe('Channel the sender belongs to'),
 			sender_id: z.string().describe('Channel-specific sender id'),
 		},
 		scope: ['write:channels'],

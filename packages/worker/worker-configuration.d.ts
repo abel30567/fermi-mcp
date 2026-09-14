@@ -31,6 +31,7 @@ declare global {
 		DISCORD_BRIDGE_SECRET?: string
 		SLACK_BOT_TOKEN?: string
 		SLACK_SIGNING_SECRET?: string
+		SLACK_BRIDGE_SECRET?: string
 		MACOS_MCP_URL?: string
 		MACOS_MCP_TOKEN?: string
 	}

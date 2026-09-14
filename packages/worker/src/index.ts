@@ -15,7 +15,7 @@ import {
 } from './channels/box-gateway.ts'
 import { handleDiscordWebhook } from './channels/discord.ts'
 import { handleNarrate } from './channels/narrate.ts'
-import { handleSlackWebhook } from './channels/slack.ts'
+import { handleSlackBridgeWebhook, handleSlackWebhook } from './channels/slack.ts'
 import { handleTelegramWebhook, setTelegramWebhook } from './channels/telegram.ts'
 import { handleWaOutboxAck, handleWaOutboxGet, handleWhatsAppWebhook } from './channels/whatsapp.ts'
 import { handleCapabilityReindex } from './cron/capability-reindex.ts'
@@ -385,6 +385,9 @@ const defaultHandler = {
 
 		if (url.pathname === '/dc/webhook' && request.method === 'POST') {
 			return handleDiscordWebhook(request, env)
+		}
+		if (url.pathname === '/sl/webhook' && request.method === 'POST') {
+			return handleSlackBridgeWebhook(request, env)
 		}
 
 		if (url.pathname.startsWith('/canvas/')) {

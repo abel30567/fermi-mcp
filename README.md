@@ -3,8 +3,8 @@
 A portable AI control plane built as a single [MCP](https://modelcontextprotocol.io)
 server on Cloudflare Workers. Connect it to Claude.ai, Claude Desktop, Claude Code,
 Cursor, or ChatGPT and they share the same memory, the same permission model, and the
-same skills. For unattended channels (Telegram, Slack) it runs its own inference loop
-against the Anthropic API.
+same skills. Unattended channels (Telegram, Discord, WhatsApp, Slack) enqueue to a D1
+task queue drained by a Mac-local daemon.
 
 One server, one memory, one permission spine — the host changes, the agent doesn't.
 
@@ -33,8 +33,8 @@ One server, one memory, one permission spine — the host changes, the agent doe
 - **Dual-lane browser** — a headless cloud lane (Cloudflare Browser Rendering) for
   scraping and a headed local lane (a macOS bridge over Cloudflare Tunnel) for sites
   that need a real hardware fingerprint and authenticated state.
-- **Channels & subagents** — Telegram and Slack webhooks with their own inference
-  loop; `team_spawn` runs role-prompted subagents.
+- **Channels & subagents** — Telegram, Discord, WhatsApp, and Slack gateway channels
+  drained by a local daemon; `team_spawn` runs role-prompted subagents.
 - **Live Canvas** — agent-driven UI over a Durable Object + WebSocket, persistent
   across turns and hosts.
 
@@ -148,9 +148,9 @@ Secrets are set with `wrangler secret put` (values entered interactively):
 | `FERMI_SECRETS_KEY` | yes | Encryption key for the secrets store |
 | `FERMI_OWNER_SECRET` | when `FERMI_AUTH_ENABLED=true` | Owner password for the OAuth consent screen and `/apps/*` login |
 | `FERMI_BEARER_TOKEN` | for admin HTTP endpoints | Gates `/capabilities`, `/cron/capability-reindex`, `/admin/seed-skills` |
-| `ANTHROPIC_API_KEY` | for channels / `team_spawn` | Inference loop for unattended use |
+| `ANTHROPIC_API_KEY` | for `team_spawn` | Worker-side subagent inference |
 | `TELEGRAM_BOT_TOKEN` | optional | Telegram channel |
-| `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET` | optional | Slack channel |
+| `SLACK_BOT_TOKEN`, `SLACK_BRIDGE_SECRET` | optional | Slack Socket Mode channel (app token lives on the daemon) |
 | `MACOS_MCP_URL`, `MACOS_MCP_TOKEN` | optional | Local macOS bridge (enables the `mac_*` tools) |
 
 Auth mode is controlled by the `FERMI_AUTH_ENABLED` var. Set it to `true` to put the
