@@ -40,7 +40,7 @@ Set the secrets the Worker needs (each is optional until the feature that uses i
 bunx wrangler secret put FERMI_BEARER_TOKEN    # admin endpoints; generate something long
 bunx wrangler secret put FERMI_SECRETS_KEY     # encrypts your stored secrets at rest
 bunx wrangler secret put FERMI_OWNER_SECRET    # OAuth consent screen password
-bunx wrangler secret put ANTHROPIC_API_KEY     # only for channels (Telegram/Slack) inference
+bunx wrangler secret put ANTHROPIC_API_KEY     # optional; team_spawn / leftover Worker inference
 ```
 
 Then turn the auth gate on for any deployment that isn't localhost:

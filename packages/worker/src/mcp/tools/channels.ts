@@ -12,7 +12,7 @@ export function registerChannelTools(agent: FermiMCP) {
 		description:
 			'Send a message to a channel chat (used by the local daemon to reply to queued tasks). The bot token stays server-side.',
 		schema: {
-			channel: z.enum(['tg', 'wa', 'dc']).describe('Channel to send through'),
+			channel: z.enum(['tg', 'wa', 'dc', 'sl']).describe('Channel to send through'),
 			chat_id: z.string().describe('Channel-specific chat id (from the task row)'),
 			text: z.string().describe('Message text to send'),
 		},

@@ -48,6 +48,23 @@ describe('approvePairing', () => {
 		expect(await env.FERMI_KV.get('pairing:WACODE01')).toBeNull()
 	})
 
+	it('adds an sl sender to the sl allowlist', async () => {
+		await env.FERMI_KV.put(
+			'pairing:SLCODE01',
+			JSON.stringify({ channel: 'sl', senderId: 'U123', chatId: 'D123' }),
+		)
+		const result = await approvePairing(workerEnv, 'slcode01')
+		expect(result).toEqual({
+			ok: true,
+			channel: 'sl',
+			senderId: 'U123',
+			chatId: 'D123',
+		})
+		expect(await isAllowed(env.FERMI_DB, 'sl', 'U123')).toBe(true)
+		expect(await isAllowed(env.FERMI_DB, 'dc', 'U123')).toBe(false)
+		expect(await env.FERMI_KV.get('pairing:SLCODE01')).toBeNull()
+	})
+
 	it('rejects an unknown or expired code', async () => {
 		const result = await approvePairing(workerEnv, 'NOPE0000')
 		expect(result).toEqual({ ok: false, error: 'invalid_or_expired_code' })

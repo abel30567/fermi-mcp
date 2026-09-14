@@ -54,8 +54,8 @@ export async function handleDailyBrief(env: Env) {
 		await sendTelegramMessage(env, chatId, briefText)
 	} else if (channel === 'wa' && chatId) {
 		await sendWhatsAppMessage(env, chatId, briefText)
-	} else if (channel === 'slack') {
-		const slackChannel = await env.FERMI_KV.get('config:daily_brief:slack_channel')
+	} else if (channel === 'slack' || channel === 'sl') {
+		const slackChannel = (await env.FERMI_KV.get('config:daily_brief:slack_channel')) || chatId
 		if (slackChannel) {
 			await sendSlackMessage(env, slackChannel, briefText)
 		}

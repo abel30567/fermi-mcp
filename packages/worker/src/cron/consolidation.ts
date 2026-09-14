@@ -29,7 +29,7 @@ export async function handleConsolidation(env: Env) {
 	await db
 		.prepare(
 			`UPDATE sessions SET ended_at = ?1
-			 WHERE ended_at IS NULL AND (host LIKE 'tg:%' OR host LIKE 'wa:%' OR host LIKE 'dc:%')
+			 WHERE ended_at IS NULL AND (host LIKE 'tg:%' OR host LIKE 'wa:%' OR host LIKE 'dc:%' OR host LIKE 'sl:%')
 			   AND id IN (SELECT session_id FROM messages GROUP BY session_id HAVING MAX(created_at) < ?2)`,
 		)
 		.bind(now, now - CHANNEL_SESSION_IDLE_MS)

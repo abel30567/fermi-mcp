@@ -12,6 +12,7 @@ interface SentMessage {
 
 const sent: SentMessage[] = []
 const discordSent: { channel_id: string; content: string }[] = []
+const slackSent: { channel: string; text: string }[] = []
 
 function interceptSendMessage() {
 	fetchMock
@@ -19,6 +20,17 @@ function interceptSendMessage() {
 		.intercept({ path: (p) => p.endsWith('/sendMessage'), method: 'POST' })
 		.reply(200, (opts) => {
 			sent.push(JSON.parse(String(opts.body)) as SentMessage)
+			return { ok: true }
+		})
+		.persist()
+}
+
+function interceptSlack() {
+	fetchMock
+		.get('https://slack.com')
+		.intercept({ path: '/api/chat.postMessage', method: 'POST' })
+		.reply(200, (opts) => {
+			slackSent.push(JSON.parse(String(opts.body)) as { channel: string; text: string })
 			return { ok: true }
 		})
 		.persist()
@@ -42,12 +54,14 @@ beforeAll(async () => {
 	fetchMock.disableNetConnect()
 	interceptSendMessage()
 	interceptDiscord()
+	interceptSlack()
 })
 
 describe('sendChannelMessage', () => {
 	beforeEach(async () => {
 		sent.length = 0
 		discordSent.length = 0
+		slackSent.length = 0
 		await clearOutbox()
 	})
 
@@ -73,6 +87,14 @@ describe('sendChannelMessage', () => {
 		expect(discordSent).toHaveLength(1)
 		expect(discordSent[0]).toMatchObject({ channel_id: '112233', content: 'discord hello' })
 		const row = await env.FERMI_DB.prepare("SELECT id FROM outbox WHERE channel = 'dc'").first()
+		expect(row).toBeNull()
+	})
+
+	it('routes sl through Slack chat.postMessage', async () => {
+		await sendChannelMessage(workerEnv, 'sl', 'C123', 'slack hello')
+		expect(slackSent).toHaveLength(1)
+		expect(slackSent[0]).toMatchObject({ channel: 'C123', text: 'slack hello' })
+		const row = await env.FERMI_DB.prepare("SELECT id FROM outbox WHERE channel = 'sl'").first()
 		expect(row).toBeNull()
 	})
 })

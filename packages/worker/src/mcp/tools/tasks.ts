@@ -17,7 +17,7 @@ export function registerTaskTools(agent: FermiMCP) {
 		description:
 			'Add a task to the channel task queue. Channel webhooks enqueue automatically; use this for manual or agent-initiated work items.',
 		schema: {
-			channel: z.enum(['tg', 'wa', 'dc', 'cloud']).describe('Channel the task belongs to'),
+			channel: z.enum(['tg', 'wa', 'dc', 'sl', 'cloud']).describe('Channel the task belongs to'),
 			sender: z.string().describe('Channel-specific sender id'),
 			chat_id: z.string().describe('Channel-specific chat id for the eventual reply'),
 			payload: z.string().describe('The task content (usually the inbound message text)'),

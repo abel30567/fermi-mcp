@@ -26,22 +26,17 @@ State machine for a `risk: high` call: `no token → pending_approval (token min
 
 ```mermaid
 sequenceDiagram
-    participant U as User on Telegram
+    participant U as User on Telegram / Discord / Slack
     participant W as Worker
     participant D1 as D1 tasks
-    participant M as Mac warm-worker
-    participant A as Anthropic API
-    U->>W: /tg/webhook
+    participant M as Mac warm-worker / poll.sh
+    U->>W: /tg/webhook or /dc/webhook or /sl/webhook
     W->>W: allowlist check (sender enumerable, pairing flow for unknowns)
-    alt Mac lane available
-        W->>D1: enqueue(queue: main)
-        M->>W: pending? → claim (lease)
-        M->>M: Claude Code harness runs, uses Fermi MCP tools
-        M->>W: task_complete(result)
-    else Worker-native lane
-        W->>A: runAgentTurn (channel inference loop)
-    end
-    W->>U: reply via Bot API
+    W->>D1: enqueue(queue: main)
+    M->>W: pending? → claim (lease)
+    M->>M: Claude Code harness runs, uses Fermi MCP tools
+    M->>W: channel_send + task_complete
+    W->>U: reply via channel REST
 ```
 
 ## 3. Neutrino: launch → proof → terminate

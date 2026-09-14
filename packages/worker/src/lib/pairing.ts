@@ -21,7 +21,12 @@ export async function approvePairing(env: Env, code: string): Promise<PairingRes
 	if (!raw) return { ok: false, error: 'invalid_or_expired_code' }
 
 	const record = JSON.parse(raw) as PairingRecord
-	if (record.channel !== 'tg' && record.channel !== 'wa' && record.channel !== 'dc') {
+	if (
+		record.channel !== 'tg' &&
+		record.channel !== 'wa' &&
+		record.channel !== 'dc' &&
+		record.channel !== 'sl'
+	) {
 		return { ok: false, error: `unknown_channel:${record.channel}` }
 	}
 
