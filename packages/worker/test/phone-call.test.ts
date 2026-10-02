@@ -7,6 +7,8 @@ import {
 	buildDialParams,
 	buildLiveSession,
 	buildNotifyPayload,
+	buildSummaryRequest,
+	extractResponseText,
 	parseStatusCallback,
 	readPhoneConfig,
 	sanitizeDigits,
@@ -213,13 +215,15 @@ describe('hold detector', () => {
 	})
 
 	it('fires once when a greeting is followed by silence, then waits for a new burst', () => {
-		const fired = run(new HoldDetector(), [
+		const detector = new HoldDetector()
+		const fired = run(detector, [
 			[QUIET, 4000],
 			[LOUD, 1500], // "Thanks for holding, how can I help?"
 			[QUIET, 6000], // agent waits
 		])
 		expect(fired).toHaveLength(1)
-		expect(fired[0]).toBe(4000 + 1500 + 1800 - FRAME_MS)
+		expect(fired[0]).toBe(4000 + 1500 + 1200 - FRAME_MS)
+		expect(detector.utteranceStartedAt).toBe(4000)
 	})
 
 	it('ignores short blips, pauses inside an utterance, and the arm delay', () => {
@@ -346,5 +350,33 @@ describe('call record helpers', () => {
 		expect(payload).toContain('300s total, 95s with the voice model, 2 hold period(s)')
 		expect(payload).toContain('+280s agent: Goodbye.')
 		expect(payload).toContain('phone_call_status with call_id call-1')
+	})
+	it('asks the backend model for a summary when a call ends without one', () => {
+		const ended = record({ status: 'ended', phase: 'ended', outcome: 'remote_hangup' })
+		appendTranscript(ended.transcript, 'caller', 'Your reference number is 4 7 2.', 1_020_000)
+		const request = buildSummaryRequest(ended, config)
+		expect(request.model).toBe('gpt-6-luna')
+		expect(request.input).toContain('Goal of the call: Ask for a penalty abatement')
+		expect(request.input).toContain('How it ended: remote_hangup')
+		expect(request.input).toContain('+10s caller: Your reference number is 4 7 2.')
+	})
+
+	it('extracts the text of a Responses API result', () => {
+		expect(
+			extractResponseText({
+				output: [
+					{ type: 'reasoning', summary: [] },
+					{
+						type: 'message',
+						content: [
+							{ type: 'output_text', text: 'They approved it. ' },
+							{ type: 'output_text', text: 'Reference 472.' },
+						],
+					},
+				],
+			}),
+		).toBe('They approved it. Reference 472.')
+		expect(extractResponseText({ output: [] })).toBeNull()
+		expect(extractResponseText({ error: { message: 'nope' } })).toBeNull()
 	})
 })

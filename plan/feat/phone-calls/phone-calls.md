@@ -29,8 +29,8 @@ phone_call_start ──► PhoneCallDO (one per call) ──► Twilio POST …/
 - **No D1 migration.** Per-call state lives in the Durable Object's storage.
 - **Hold gate:** the model calls `wait_on_hold` when it hears hold music or "please hold"; the
   DO closes the GPT-Live session and watches inbound audio energy. A speech-like burst followed
-  by ≥1.8 s of silence re-opens GPT-Live with the buffered audio replayed, so the model hears
-  the greeting. False positives are cheap: the model calls `wait_on_hold` again (20 s cooldown).
+  by ≥1.2 s of silence re-opens GPT-Live and replays that utterance, so the model hears the
+  greeting. False positives are cheap: the model calls `wait_on_hold` again (20 s cooldown).
 - **DTMF:** Twilio has no "press key" API on a streamed call, so `send_dtmf` replaces the call's
   TwiML with `<Play digits>` + a new `<Connect><Stream>`. The stream reconnects; the DO tolerates
   the gap and keeps GPT-Live open.
@@ -78,12 +78,17 @@ phone_call_start ──► PhoneCallDO (one per call) ──► Twilio POST …/
 - Twilio trial accounts cannot use `<Stream>` at all; a full account also needs an approved
   primary customer profile and voice geo-permissions for the destination country.
 - Voicemail: the agent hangs up immediately unless the goal says to leave a message.
+- When a call ends without `end_call` (the other party hangs up first, timeout), the DO asks the
+  backend model for a summary from the transcript, so the requester never gets a bare transcript.
 
 **Known gaps**
 
-- Pickup latency after a hold is 5–6 s (silence gate + reconnect + model), versus about 1 s when
-  the session is already open.
-- No summary is written when the other party hangs up first; only `end_call` produces one.
+- Pickup latency after a hold is still about 5 s, versus about 1 s when the session is already
+  open. Shortening the silence gate (1.8 s → 1.2 s) and replaying only the greeting saved roughly
+  half a second. The rest is structural: 1.2 s gate + ~0.8 s to open a session + the model
+  ingesting the replayed greeting at roughly twice real time. Closing the gap needs a product
+  decision: wake the model at speech onset (fast, but it then also listens to recorded hold
+  messages), or play an instant canned acknowledgement while the model catches up.
 - The voice agent has no Fermi tools during a call; whoever starts the call must put the facts
   it needs into `context`.
 - DTMF on a real phone menu and a real hold have only been exercised in the simulator.
