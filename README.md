@@ -87,6 +87,7 @@ MCP tools by group (host-facing):
 | Packages | `package_set`, `package_get`, `package_list`, `package_delete` |
 | Retrievers | `retriever_set`, `retriever_run`, `retriever_get`, `retriever_list`, `retriever_delete` |
 | OAuth | `oauth_register_client`, `oauth_get_client`, `oauth_list_clients`, `oauth_delete_client`, `oauth_authorize_url`, `totp_setup` |
+| Phone calls | `phone_call_start`, `phone_call_status`, `phone_call_hangup` (Twilio + OpenAI GPT-Live; see [USAGE §8](docs/USAGE.md#8-optional-outbound-phone-calls-twilio--gpt-live)) |
 | macOS bridge (optional) | 25 `mac_*` tools, registered only when `MACOS_MCP_URL` is set |
 
 ## Quick start
@@ -152,6 +153,7 @@ Secrets are set with `wrangler secret put` (values entered interactively):
 | `TELEGRAM_BOT_TOKEN` | optional | Telegram channel |
 | `SLACK_BOT_TOKEN`, `SLACK_BRIDGE_SECRET` | optional | Slack Socket Mode channel (app token lives on the daemon) |
 | `MACOS_MCP_URL`, `MACOS_MCP_TOKEN` | optional | Local macOS bridge (enables the `mac_*` tools) |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `OPENAI_API_KEY`, `FERMI_PUBLIC_URL` | for phone calls | Outbound calls. Read from the Fermi secrets store (`secret_set`, scope `app`) first, then from Worker vars/secrets of the same name |
 
 Auth mode is controlled by the `FERMI_AUTH_ENABLED` var. Set it to `true` to put the
 MCP transports behind OAuth — recommended for every deployed instance. Leaving it

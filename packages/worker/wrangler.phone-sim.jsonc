@@ -1,0 +1,42 @@
+// Local-only config for scripts/phone-sim.mjs: just the bindings the phone-call
+// path touches (D1, KV, R2, Durable Objects). No account ids, nothing remote.
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "fermi-phone-sim",
+	"compatibility_date": "2026-04-28",
+	"compatibility_flags": ["nodejs_compat"],
+	"main": "./src/index.ts",
+	"rules": [{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true }],
+	"d1_databases": [
+		{
+			"binding": "FERMI_DB",
+			"database_name": "fermi-phone-sim",
+			"database_id": "00000000-0000-0000-0000-000000000000",
+			"migrations_dir": "./migrations"
+		}
+	],
+	"r2_buckets": [{ "binding": "FERMI_BUCKET", "bucket_name": "fermi-phone-sim" }],
+	"kv_namespaces": [
+		{ "binding": "FERMI_KV", "id": "fermi-phone-sim-kv" },
+		{ "binding": "OAUTH_KV", "id": "fermi-phone-sim-oauth" }
+	],
+	"durable_objects": {
+		"bindings": [
+			{ "class_name": "FermiMCP", "name": "MCP_OBJECT" },
+			{ "class_name": "LiveCanvasDO", "name": "CANVAS_DO" },
+			{ "class_name": "SandboxStorageDO", "name": "SANDBOX_STORAGE" },
+			{ "class_name": "BrowserSessionDO", "name": "BROWSER_SESSION" },
+			{ "class_name": "FleetDO", "name": "FLEET_DO" },
+			{ "class_name": "PhoneCallDO", "name": "PHONE_CALL" }
+		]
+	},
+	"migrations": [
+		{ "new_sqlite_classes": ["FermiMCP"], "tag": "v1" },
+		{ "new_sqlite_classes": ["LiveCanvasDO"], "tag": "v2" },
+		{ "new_sqlite_classes": ["SandboxStorageDO"], "tag": "v3" },
+		{ "new_sqlite_classes": ["BrowserSessionDO"], "tag": "v4" },
+		{ "new_sqlite_classes": ["FleetDO"], "tag": "v5" },
+		{ "new_sqlite_classes": ["PhoneCallDO"], "tag": "v6" }
+	],
+	"vars": { "FERMI_ENV": "development" }
+}

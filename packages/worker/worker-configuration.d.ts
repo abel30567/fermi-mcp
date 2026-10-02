@@ -13,6 +13,7 @@ declare global {
 		CANVAS_DO: DurableObjectNamespace
 		SANDBOX_STORAGE: DurableObjectNamespace
 		BROWSER_SESSION: DurableObjectNamespace
+		PHONE_CALL: DurableObjectNamespace
 		MYBROWSER?: Fetcher
 		LOADER?: WorkerLoader
 		GATEWAY?: Fetcher
@@ -34,5 +35,6 @@ declare global {
 		SLACK_BRIDGE_SECRET?: string
 		MACOS_MCP_URL?: string
 		MACOS_MCP_TOKEN?: string
+		FERMI_PUBLIC_URL?: string
 	}
 }

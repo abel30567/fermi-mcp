@@ -27,6 +27,7 @@ import { handleSkillDistillation } from './cron/skill-distillation.ts'
 import { BrowserSessionDO } from './do/browser-session.ts'
 import { FleetDO } from './do/fleet-do.ts'
 import { LiveCanvasDO } from './do/live-canvas.ts'
+import { PhoneCallDO } from './do/phone-call.ts'
 import { SandboxStorageDO } from './do/sandbox-storage.ts'
 import { handleAppsRequest } from './lib/apps-handler.ts'
 import { handleAppsLoginGet, handleAppsLoginPost, handleAppsLogout } from './lib/apps-login.ts'
@@ -38,7 +39,15 @@ import { FermiMCP } from './mcp/index.ts'
 import { CodemodeFetchGateway } from './sandbox/fetch-gateway.ts'
 import { seedSkills } from './seeds/index.ts'
 
-export { BrowserSessionDO, CodemodeFetchGateway, FermiMCP, FleetDO, LiveCanvasDO, SandboxStorageDO }
+export {
+	BrowserSessionDO,
+	CodemodeFetchGateway,
+	FermiMCP,
+	FleetDO,
+	LiveCanvasDO,
+	PhoneCallDO,
+	SandboxStorageDO,
+}
 
 // biome-ignore lint/suspicious/noExplicitAny: McpAgent.serve is not exposed in types
 const mcpApiHandler = (FermiMCP as any).serve('/mcp', { binding: 'MCP_OBJECT' })
@@ -388,6 +397,21 @@ const defaultHandler = {
 		}
 		if (url.pathname === '/sl/webhook' && request.method === 'POST') {
 			return handleSlackBridgeWebhook(request, env)
+		}
+
+		// Outbound phone calls: Twilio opens the media WebSocket to the call's DO at
+		// /phone/stream/<call_id>/<token> and POSTs signed status callbacks.
+		if (url.pathname.startsWith('/phone/stream/')) {
+			const [callId, token] = url.pathname.slice('/phone/stream/'.length).split('/')
+			if (!callId || !token) return new Response('Bad stream path', { status: 400 })
+			const stub = env.PHONE_CALL.get(env.PHONE_CALL.idFromName(callId))
+			return stub.fetch(
+				new Request(`https://do/stream?token=${encodeURIComponent(token)}`, request),
+			)
+		}
+		if (url.pathname === '/phone/webhook' && request.method === 'POST') {
+			const { handlePhoneWebhook } = await import('./lib/phone-call.ts')
+			return handlePhoneWebhook(request, env)
 		}
 
 		if (url.pathname.startsWith('/canvas/')) {
