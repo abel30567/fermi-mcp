@@ -14,7 +14,7 @@ The full, source-anchored description lives in [`docs/ARCHITECTURE.md`](https://
 
 ## Tool surface
 
-Tool families registered in `src/mcp/register-tools.ts`: memory, skills, search, secrets, tasks, schedules, channels, allowlist, conversations, profile, retrievers, packages, connectors, OAuth, TOTP, filesystem, hooks, plan mode, meta, cloud browser + persistent browser sessions, web sessions, **cloud agents**, phone calls (Twilio + GPT-Live, one `PhoneCallDO` per call), and (when `MACOS_MCP_URL` is set) the 25 `mac_*` bridge tools.
+Tool families registered in `src/mcp/register-tools.ts`: memory, skills, search, secrets, tasks, schedules, channels, allowlist, conversations, profile, retrievers, packages, connectors, OAuth, TOTP, filesystem, hooks, plan mode, meta, cloud browser + persistent browser sessions, web sessions, **cloud agents**, [phone calls](/components/phone-calls) (Twilio + GPT-Live, one `PhoneCallDO` per call), and (when `MACOS_MCP_URL` is set) the 25 `mac_*` bridge tools.
 
 Every tool declares `scope`, `risk`, `mutates`, and runs through the same pipeline. `execute` gives hosts a JS sandbox whose only egress is a gateway that expands <code v-pre>{{secret:NAME}}</code> against per-secret host allowlists.
 
@@ -27,6 +27,7 @@ Every tool declares `scope`, `risk`, `mutates`, and runs through the same pipeli
 | `/admin/*` | `FERMI_BEARER_TOKEN` | fleet launch/status/pin, broker claim/complete, session capture/state, pending tasks |
 | `/box/*` | per-box token `<box_id>.<secret>` | the neutrino gateway: poll, heartbeat, artifact, complete, report, session-lease, browser-rpc, inference-auth |
 | `/apps/*` | OAuth-gated | static hosting from R2 |
+| `/phone/webhook`, `/phone/stream/*` | Twilio signature; per-call token in the stream path | call status callbacks and the call's audio WebSocket ([phone calls](/components/phone-calls)) |
 
 ## Cron
 

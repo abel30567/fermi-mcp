@@ -37,6 +37,7 @@ export default withMermaid(
 							{ text: 'MacOSMCP', link: '/components/macos-mcp' },
 							{ text: 'Neutrinos: the cloud fleet', link: '/components/neutrinos' },
 							{ text: 'The session broker', link: '/components/session-broker' },
+							{ text: 'Phone calls', link: '/components/phone-calls' },
 						],
 					},
 				],

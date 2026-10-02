@@ -15,6 +15,8 @@ Every tier of Fermi is a trust decision. This page enumerates exactly what each 
 | AWS keys (EC2 scope) | Worker | Fermi secrets store, host-allowlisted to `*.amazonaws.com` | Tier 4 launch/terminate | EC2 spend + instances in one region |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Worker → each box | Fermi secrets store; injected into box env at provision | box inference on your subscription | your Claude subscription usage |
 | `GITHUB_TOKEN` | Worker → boxes needing repo work | Fermi secrets store | agent pushes/PRs | your repos, to the token's scope |
+| Twilio Account SID + Auth Token | Worker | Fermi secrets store | [phone calls](/components/phone-calls): dialing, and verifying Twilio's callbacks | calls and spend on your Twilio account, from your caller ID; forged call-status callbacks |
+| `OPENAI_API_KEY` | Worker | Fermi secrets store | the voice model on phone calls | OpenAI API spend |
 | Web session cookies | **Mac broker executor only** | D1 encrypted at rest; decrypted only on the Mac | session-brokered browsing | the captured site session — and only until you `web_session_invalidate` |
 
 ## Design rules that bound each grant
@@ -32,6 +34,7 @@ Every tier of Fermi is a trust decision. This page enumerates exactly what each 
 - The approval gate keys on token *presence*, not argument re-verification (args are hashed for audit, not re-compared).
 - MacOSMCP behind a tunnel is a remote-control surface for anyone holding both your Worker auth and a connected host. Host discipline is part of the perimeter.
 - Channel allowlists gate who can *enqueue* work; they do not sandbox what a queued task may ask for. Prompt-injection through channel content remains your risk to manage.
+- On a phone call, everything in the call's `context` can be spoken to whoever answers, and the other party's words come back as a transcript. Put only what the call needs in `context`, and treat the transcript as untrusted input.
 :::
 
 ## The minimum-grant configurations

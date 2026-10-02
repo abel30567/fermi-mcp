@@ -350,8 +350,18 @@ Worker vars/secrets of the same name:
 | `FERMI_PUBLIC_URL` | `https://<worker>` — Twilio connects to `/phone/stream/<call_id>/<token>` and posts to `/phone/webhook` |
 | `OPENAI_LIVE_MODEL`, `OPENAI_LIVE_BACKEND_MODEL`, `OPENAI_LIVE_VOICE` | optional (defaults `gpt-live-1`, `gpt-6-luna`, `marin`) |
 
-A Twilio **trial** account only calls verified numbers and plays a trial notice the
-callee must acknowledge; upgrade the account for real use.
+**Accounts you need.** A fresh Twilio account cannot place these calls; each missing
+step fails at dial time with the Twilio error shown in `phone_call_start`'s `error`:
+
+1. **Upgrade out of trial** (trial accounts cannot use media streams).
+2. **An approved primary customer profile** in Trust Hub (error `20003` without it).
+3. **Voice geo-permissions** for the destination country (error `21215` without it).
+4. **A caller ID**: a purchased Twilio number, or a number you own added under Verified
+   Caller IDs (error `21210` without it).
+
+On the OpenAI side you need an API key with access to the Live API (`gpt-live-1`) and to
+the backend text model. The full walkthrough, how a call works, and troubleshooting are in
+the docs site: [Phone calls](https://abel30567.github.io/fermi-mcp/components/phone-calls).
 
 `phone_call_start` is `risk: high` (re-invoke with the approval token). It returns a
 `call_id` at once; the call runs on its own for up to `max_minutes`. Follow it with
