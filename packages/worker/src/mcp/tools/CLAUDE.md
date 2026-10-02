@@ -22,3 +22,4 @@ Each file implements one or more MCP tools:
 | totp.ts | totp_setup |
 | meta.ts | list_capabilities, usage_stats |
 | macos-bridge.ts | Proxies 25 mac_* tools to local Mac MCP server via Cloudflare Tunnel |
+| phone.ts | phone_call_start, phone_call_status, phone_call_hangup (Twilio + GPT-Live, state in PhoneCallDO) |
