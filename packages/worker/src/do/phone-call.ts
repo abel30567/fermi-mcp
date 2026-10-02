@@ -20,12 +20,14 @@ import {
 	twilioHangup,
 	twilioUpdateTwiml,
 	unansweredOutcome,
+	writeCallSummary,
 } from '../lib/phone-call.ts'
-import { HoldDetector, ulawFrameRms } from '../lib/phone-hold.ts'
+import { FRAME_MS, HoldDetector, ulawFrameRms } from '../lib/phone-hold.ts'
 import { enqueueTask } from '../lib/task-store.ts'
 
 const OPENAI_LIVE_URL = 'https://api.openai.com/v1/live/sessions'
 const REPLAY_FRAMES = 400 // 8 s of 20 ms frames replayed to GPT-Live when it (re)connects
+const REPLAY_PREROLL_FRAMES = 20 // 400 ms kept ahead of the utterance that ended a hold
 const MAX_LIVE_RECONNECTS = 5
 const END_CALL_GRACE_MS = 2500 // let the goodbye finish playing before hanging up
 const HOLD_ENTER_DELAY_MS = 1500
@@ -307,7 +309,15 @@ export class PhoneCallDO extends DurableObject<Env> {
 		}
 		if (record.phase === 'hold') {
 			this.pushReplay(payload)
-			if (this.hold.feed(ulawFrameRms(fromBase64(payload)), Date.now())) {
+			const now = Date.now()
+			if (this.hold.feed(ulawFrameRms(fromBase64(payload)), now)) {
+				// Replay only the greeting, not the hold music before it: less audio for
+				// the model to chew through before it can answer.
+				const startedAt = this.hold.utteranceStartedAt
+				if (startedAt !== null) {
+					const frames = Math.ceil((now - startedAt) / FRAME_MS) + REPLAY_PREROLL_FRAMES
+					this.replay = this.replay.slice(-frames)
+				}
 				this.engageFromHold(record)
 			}
 		}
@@ -672,6 +682,15 @@ export class PhoneCallDO extends DurableObject<Env> {
 		}
 		await this.ctx.storage.deleteAlarm()
 		await this.save(record)
+		if (!record.summary && record.transcript.length > 0) {
+			try {
+				record.summary = await writeCallSummary(await this.getConfig(), record)
+				if (record.summary) logCallEvent(record, 'summary_written')
+			} catch (e) {
+				logCallEvent(record, 'summary_error', err(e))
+			}
+			await this.save(record)
+		}
 		if (record.notify) {
 			try {
 				await enqueueTask(this.env.FERMI_DB, {

@@ -485,6 +485,64 @@ export function buildLiveSession(record: CallRecord, config: PhoneConfig): Recor
 	}
 }
 
+const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
+
+/** Request body asking the backend model to summarize a call that ended without `end_call`. */
+export function buildSummaryRequest(
+	record: CallRecord,
+	config: PhoneConfig,
+): Record<string, unknown> {
+	return {
+		model: config.backendModel,
+		instructions:
+			'You summarize a phone call for the person who asked for it. Write 2-4 plain sentences: what happened, what the other party said, any reference numbers, names, dates, or amounts, and the next step. State only what the transcript supports. If almost nothing was said, say that in one sentence.',
+		input: [
+			`Goal of the call: ${record.goal}`,
+			`How it ended: ${record.outcome ?? 'unknown'}`,
+			'',
+			'Transcript ("caller" is the other party, "agent" is our assistant):',
+			formatTranscript(record, 200) || '(nothing was said)',
+		].join('\n'),
+	}
+}
+
+/** Text of a Responses API result: the `output_text` parts of its message items. */
+export function extractResponseText(json: unknown): string | null {
+	const output = (json as { output?: Array<{ type?: string; content?: unknown }> } | null)?.output
+	if (!Array.isArray(output)) return null
+	const parts: string[] = []
+	for (const item of output) {
+		if (item.type !== 'message' || !Array.isArray(item.content)) continue
+		for (const part of item.content as Array<{ type?: string; text?: unknown }>) {
+			if (part.type === 'output_text' && typeof part.text === 'string') parts.push(part.text)
+		}
+	}
+	const text = parts.join('').trim()
+	return text || null
+}
+
+/**
+ * Only `end_call` writes a summary. When the other party hangs up first (or the
+ * call times out) the requester would get a bare transcript, so ask the backend
+ * model for one. Best-effort: returns null on any failure.
+ */
+export async function writeCallSummary(
+	config: PhoneConfig,
+	record: CallRecord,
+): Promise<string | null> {
+	const res = await fetch(OPENAI_RESPONSES_URL, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${config.openaiApiKey}`,
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify(buildSummaryRequest(record, config)),
+		signal: AbortSignal.timeout(20_000),
+	})
+	if (!res.ok) throw new Error(`summary request failed: ${res.status}`)
+	return extractResponseText(await res.json())
+}
+
 /** What tools return to hosts: the record minus nothing, but with a compact transcript. */
 export function summarizeCall(record: CallRecord): Record<string, unknown> {
 	return {
