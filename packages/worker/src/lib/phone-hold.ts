@@ -38,7 +38,7 @@ export interface HoldDetectorOptions {
 	activeRms?: number
 	/** A sound run must last at least this long to count as speech (default 400 ms). */
 	minBurstMs?: number
-	/** Silence after the burst that means the speaker is waiting for us (default 1800 ms). */
+	/** Silence after the burst that means the speaker is waiting for us (default 1200 ms). */
 	silenceMs?: number
 	/** Minimum gap between two triggers (default 20 s) — bounds false-positive cost. */
 	cooldownMs?: number
@@ -61,11 +61,13 @@ export class HoldDetector {
 	private silentMs = 0
 	private lastBurstMs = 0
 	private lastTriggerAt = Number.NEGATIVE_INFINITY
+	private burstStartAt: number | null = null
+	private triggerBurstStartAt: number | null = null
 
 	constructor(opts: HoldDetectorOptions = {}) {
 		this.activeRms = opts.activeRms ?? 500
 		this.minBurstMs = opts.minBurstMs ?? 400
-		this.silenceMs = opts.silenceMs ?? 1800
+		this.silenceMs = opts.silenceMs ?? 1200
 		this.cooldownMs = opts.cooldownMs ?? 20_000
 		this.armDelayMs = opts.armDelayMs ?? 3000
 		this.gapResetMs = opts.gapResetMs ?? 600
@@ -77,6 +79,13 @@ export class HoldDetector {
 		this.burstMs = 0
 		this.silentMs = 0
 		this.lastBurstMs = 0
+		this.burstStartAt = null
+		this.triggerBurstStartAt = null
+	}
+
+	/** When the utterance behind the most recent trigger began (same clock as `feed`). */
+	get utteranceStartedAt(): number | null {
+		return this.triggerBurstStartAt
 	}
 
 	/**
@@ -88,6 +97,7 @@ export class HoldDetector {
 		if (atMs - this.startedAt < this.armDelayMs) return false
 		if (rms >= this.activeRms) {
 			if (this.silentMs >= this.gapResetMs) this.burstMs = 0
+			if (this.burstMs === 0) this.burstStartAt = atMs
 			this.burstMs += frameMs
 			this.silentMs = 0
 			return false
@@ -98,6 +108,7 @@ export class HoldDetector {
 		if (this.lastBurstMs < this.minBurstMs) return false
 		if (atMs - this.lastTriggerAt < this.cooldownMs) return false
 		this.lastTriggerAt = atMs
+		this.triggerBurstStartAt = this.burstStartAt
 		this.lastBurstMs = 0 // a new burst is required before the next trigger
 		this.burstMs = 0
 		return true

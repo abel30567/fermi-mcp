@@ -25,6 +25,9 @@ const PORT = Number(process.env.PHONE_SIM_PORT ?? 8899)
 const DIR = process.env.PHONE_SIM_DIR ?? '/tmp/fermi-phone-sim'
 const HOLD_SECONDS = Number(process.env.PHONE_SIM_HOLD_SECONDS ?? 25)
 const VOICE = process.env.PHONE_SIM_VOICE ?? 'Samantha'
+// PHONE_SIM_CALLEE_HANGS_UP=1: the human hangs up right after answering the request,
+// before the agent can end the call — exercises the summary written on remote hang-up.
+const CALLEE_HANGS_UP = process.env.PHONE_SIM_CALLEE_HANGS_UP === '1'
 // Must match TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN in the worker's env file.
 const ACCOUNT_SID = 'ACsim'
 const AUTH_TOKEN = 'sim-token'
@@ -456,6 +459,12 @@ async function scenario() {
 	if (call.ended) return
 	log('callee: approves the request')
 	await say(clips.approve)
+	if (CALLEE_HANGS_UP) {
+		await sleep(500)
+		log('callee hangs up right away')
+		endCall('callee')
+		return
+	}
 	await agentTurn(30_000)
 	if (!call.ended) {
 		log('callee: goodbye')
@@ -564,11 +573,19 @@ check(
 	'hold detector re-engaged the model',
 	events.includes('hold_end') && events.includes('live_reconnect'),
 )
-check(
-	'agent ended the call itself (end_call)',
-	call.endedBy === 'agent' && events.includes('end_requested'),
-	`ended by ${call.endedBy}`,
-)
+if (CALLEE_HANGS_UP) {
+	check(
+		'summary written after the callee hung up first',
+		call.endedBy === 'callee' && events.includes('summary_written'),
+		`ended by ${call.endedBy}`,
+	)
+} else {
+	check(
+		'agent ended the call itself (end_call)',
+		call.endedBy === 'agent' && events.includes('end_requested'),
+		`ended by ${call.endedBy}`,
+	)
+}
 check(
 	'outcome and summary recorded',
 	Boolean(final.call?.outcome && final.call?.summary),
