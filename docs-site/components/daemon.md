@@ -46,6 +46,10 @@ sequenceDiagram
 
 They compose: the reference deployment runs both. Tier 2 handles queued work; Tier 3 handles interactive control. The daemon's harness itself connects to Fermi over MCP, so queued tasks still get memory, skills, secrets, and channels.
 
+## Phone calls from a chat
+
+A lane lives for minutes; a call can last hours. So a call requested from a channel is split in two: one lane confirms the details with you, starts the call with `phone_call_start`, and finishes; the call then runs inside the Worker; and when it ends the Worker enqueues a result task that a fresh lane relays to your chat. The drain prompt requires the lane to state who it will call and what it will say, and to wait for your yes before dialing. Details: [Phone calls](/components/phone-calls#through-the-daemon-s-channels).
+
 ## Setup
 
 ```bash
