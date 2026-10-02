@@ -18,6 +18,7 @@ import { registerMetaTools } from './tools/meta.ts'
 import { registerOauthTools } from './tools/oauth.ts'
 import { registerOpenGeneratedUiTool } from './tools/open-generated-ui.ts'
 import { registerPackageTools } from './tools/packages.ts'
+import { registerPhoneTools } from './tools/phone.ts'
 import { registerProfileTools } from './tools/profile.ts'
 import { registerRetrieverTools } from './tools/retrievers.ts'
 import { registerScheduleTools } from './tools/schedules.ts'
@@ -59,4 +60,5 @@ export async function registerTools(agent: FermiMCP) {
 	registerConversationTools(agent)
 	registerProfileTools(agent)
 	registerScheduleTools(agent)
+	registerPhoneTools(agent)
 }

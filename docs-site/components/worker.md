@@ -14,7 +14,7 @@ The full, source-anchored description lives in [`docs/ARCHITECTURE.md`](https://
 
 ## Tool surface
 
-Tool families registered in `src/mcp/register-tools.ts`: memory, skills, search, secrets, tasks, schedules, channels, allowlist, conversations, profile, retrievers, packages, connectors, OAuth, TOTP, filesystem, hooks, plan mode, meta, cloud browser + persistent browser sessions, web sessions, **cloud agents**, and (when `MACOS_MCP_URL` is set) the 25 `mac_*` bridge tools.
+Tool families registered in `src/mcp/register-tools.ts`: memory, skills, search, secrets, tasks, schedules, channels, allowlist, conversations, profile, retrievers, packages, connectors, OAuth, TOTP, filesystem, hooks, plan mode, meta, cloud browser + persistent browser sessions, web sessions, **cloud agents**, phone calls (Twilio + GPT-Live, one `PhoneCallDO` per call), and (when `MACOS_MCP_URL` is set) the 25 `mac_*` bridge tools.
 
 Every tool declares `scope`, `risk`, `mutates`, and runs through the same pipeline. `execute` gives hosts a JS sandbox whose only egress is a gateway that expands <code v-pre>{{secret:NAME}}</code> against per-secret host allowlists.
 

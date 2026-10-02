@@ -329,7 +329,76 @@ hardware fingerprint and residential network.
 
 ---
 
-## 8. Operations
+## 8. Optional: outbound phone calls (Twilio + GPT-Live)
+
+`phone_call_start` places a real call through Twilio and hands the conversation to
+OpenAI's GPT-Live voice model with a goal ("call the IRS, wait on hold, request a
+first-time penalty abatement"). One `PhoneCallDO` per call bridges a Twilio
+bidirectional media stream (μ-law) to GPT-Live, navigates phone menus (`send_dtmf`),
+and **closes the GPT-Live session while on hold** — it re-opens only when a person
+picks up (speech burst followed by silence), replaying the greeting.
+
+Configure with `secret_set` (scope `app`) from any host — no redeploy needed — or as
+Worker vars/secrets of the same name:
+
+| Name | Value |
+|------|-------|
+| `TWILIO_ACCOUNT_SID` | Twilio account SID |
+| `TWILIO_AUTH_TOKEN` | Twilio auth token; also verifies the signature on `/phone/webhook` |
+| `TWILIO_FROM_NUMBER` | caller id, E.164: a Twilio number, or a number you own that is a Verified Caller ID |
+| `OPENAI_API_KEY` | OpenAI key with GPT-Live access |
+| `FERMI_PUBLIC_URL` | `https://<worker>` — Twilio connects to `/phone/stream/<call_id>/<token>` and posts to `/phone/webhook` |
+| `OPENAI_LIVE_MODEL`, `OPENAI_LIVE_BACKEND_MODEL`, `OPENAI_LIVE_VOICE` | optional (defaults `gpt-live-1`, `gpt-6-luna`, `marin`) |
+
+A Twilio **trial** account only calls verified numbers and plays a trial notice the
+callee must acknowledge; upgrade the account for real use.
+
+`phone_call_start` is `risk: high` (re-invoke with the approval token). It returns a
+`call_id` at once; the call runs on its own for up to `max_minutes`. Follow it with
+`phone_call_status` (`wait_seconds` long-polls), stop it with `phone_call_hangup`. Pass
+`notify_channel` + `notify_chat_id` and the outcome, summary, and transcript are
+enqueued as a `phone:<call_id>` task for that chat when the call ends, so the daemon
+reports back even if the lane that started the call is long gone.
+
+Pressing a menu key replaces the call's TwiML with `<Play digits>` followed by a new
+`<Connect><Stream>`, so the media stream reconnects (a 1–2 s audio gap) after each
+`send_dtmf`.
+
+Cost: GPT-Live bills per second of open session (hold time is free), plus Twilio
+per-minute and the backend model's tool calls.
+
+### Local test without a carrier
+
+`packages/worker/scripts/phone-sim.mjs` stands in for Twilio: it serves the call
+create/update endpoints, sends signed status callbacks, and streams a scripted callee
+(phone menu, hold music, then a human) into the worker over the media WebSocket.
+GPT-Live is real, so a run costs a few cents. Needs macOS `say` and `ffmpeg`.
+
+```bash
+cd packages/worker
+mkdir -p /tmp/fermi-phone-sim
+cat > /tmp/fermi-phone-sim/dev.env <<EOF
+FERMI_SECRETS_KEY=$(openssl rand -hex 32)
+FERMI_PUBLIC_URL=http://127.0.0.1:8787
+TWILIO_API_BASE=http://127.0.0.1:8899
+TWILIO_ACCOUNT_SID=ACsim
+TWILIO_AUTH_TOKEN=sim-token
+TWILIO_FROM_NUMBER=+15550001111
+OPENAI_API_KEY=sk-...
+EOF
+STATE=/tmp/fermi-phone-sim/state
+wrangler d1 migrations apply FERMI_DB --local --persist-to $STATE --config wrangler.phone-sim.jsonc
+wrangler dev --local --config wrangler.phone-sim.jsonc --persist-to $STATE \
+  --env-file /tmp/fermi-phone-sim/dev.env &
+node scripts/phone-sim.mjs                        # prints PASS/FAIL checks + transcript
+```
+
+It writes a stereo recording (left = callee, right = agent) and the full call record
+to `/tmp/fermi-phone-sim/`.
+
+---
+
+## 9. Operations
 
 ### Scheduled jobs
 
@@ -364,7 +433,7 @@ single-use. Re-invoke the same tool with `approval_token` to proceed.
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Symptom | Likely cause |
 |---------|--------------|
