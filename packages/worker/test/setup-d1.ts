@@ -226,7 +226,7 @@ export async function clearAllowlist() {
 // Mirrors migrations/0015_outbox.sql
 const OUTBOX_SCHEMA = `CREATE TABLE IF NOT EXISTS outbox (
   id TEXT PRIMARY KEY, channel TEXT NOT NULL, chat_id TEXT NOT NULL,
-  body TEXT NOT NULL,
+  body TEXT NOT NULL, media TEXT,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','sent')),
   created_at INTEGER NOT NULL, sent_at INTEGER
 )`
