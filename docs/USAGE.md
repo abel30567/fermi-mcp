@@ -289,6 +289,14 @@ enqueue onto a D1 task queue; a Mac-local daemon drains them (`task_claim` →
 work → `channel_send`). Slack is a Socket Mode bridge (`packages/sl-bridge`),
 not an in-worker inference loop.
 
+`channel_send` can also deliver an attachment: pass
+`media: { kind: image|document|audio|video, path?, url?, mimetype?, caption?, file_name? }`.
+The row lands in the outbox (`GET /<wa|dc|sl>/outbox`, `POST /<channel>/outbox/ack`,
+bearer `FERMI_BEARER_TOKEN`) and the Mac-local bridge uploads it, so a local `path`
+works — but only under `~/fermi-daemon/media/out/`, which is the guardrail against a
+prompt exfiltrating arbitrary files. Telegram is sent from the Worker, so it accepts
+`url` only. Text-only calls are unchanged.
+
 ```bash
 wrangler secret put TELEGRAM_BOT_TOKEN
 wrangler secret put TELEGRAM_WEBHOOK_SECRET

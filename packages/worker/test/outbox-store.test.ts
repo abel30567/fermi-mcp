@@ -47,6 +47,24 @@ describe('enqueueOutbound', () => {
 	})
 })
 
+describe('enqueueOutbound with media', () => {
+	it('stores the attachment as JSON and returns it parsed', async () => {
+		const media = {
+			kind: 'document' as const,
+			path: '/Users/me/fermi-daemon/media/out/report.pdf',
+			mimetype: 'application/pdf',
+			caption: 'Q3 report',
+			file_name: 'report.pdf',
+		}
+		await enqueueOutbound(db, { channel: 'dc', chatId: '7', body: 'Q3 report', media })
+		const [row] = await listPendingOutbox(db, 'dc')
+		expect(row.media).toEqual(media)
+		const text = await enqueueOutbound(db, { channel: 'dc', chatId: '7', body: 'plain' })
+		const rows = await listPendingOutbox(db, 'dc')
+		expect(rows.find((r) => r.id === text.id)?.media).toBeNull()
+	})
+})
+
 describe('listPendingOutbox', () => {
 	it('returns pending rows oldest-first, channel-filtered, excluding sent', async () => {
 		const a = await enqueueOutbound(db, { channel: 'wa', chatId: '1', body: 'first' })

@@ -1,9 +1,11 @@
 import { isAllowed } from '../lib/allowlist-store.ts'
 import { logChannelMessage } from '../lib/conversation.ts'
 import { timingSafeEqual } from '../lib/crypto.ts'
-import { ackOutbox, enqueueOutbound, listPendingOutbox } from '../lib/outbox-store.ts'
+import { enqueueOutbound } from '../lib/outbox-store.ts'
 import { approvePairing } from '../lib/pairing.ts'
 import { enqueueTask } from '../lib/task-store.ts'
+import type { OutboundMedia } from './media.ts'
+import { handleOutboxAck, handleOutboxGet } from './outbox-http.ts'
 
 interface WhatsAppInbound {
 	sender?: string
@@ -83,28 +85,20 @@ export async function handleWhatsAppWebhook(request: Request, env: Env): Promise
 	return new Response('ok')
 }
 
-/** Queue an outbound WhatsApp message for the bridge to deliver. */
-export async function sendWhatsAppMessage(env: Env, chatId: string, text: string): Promise<void> {
-	await enqueueOutbound(env.FERMI_DB, { channel: 'wa', chatId, body: text })
+/** Queue an outbound WhatsApp message (optionally an attachment) for the bridge to deliver. */
+export async function sendWhatsAppMessage(
+	env: Env,
+	chatId: string,
+	text: string,
+	media?: OutboundMedia,
+): Promise<void> {
+	await enqueueOutbound(env.FERMI_DB, { channel: 'wa', chatId, body: text, media })
 }
 
-export async function handleWaOutboxGet(request: Request, env: Env): Promise<Response> {
-	const auth = request.headers.get('authorization') ?? ''
-	const token = env.FERMI_BEARER_TOKEN
-	if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
-	return Response.json({ messages: await listPendingOutbox(env.FERMI_DB, 'wa', 10) })
+export function handleWaOutboxGet(request: Request, env: Env): Promise<Response> {
+	return handleOutboxGet(request, env, 'wa')
 }
 
-export async function handleWaOutboxAck(request: Request, env: Env): Promise<Response> {
-	const auth = request.headers.get('authorization') ?? ''
-	const token = env.FERMI_BEARER_TOKEN
-	if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
-
-	const body = (await request.json().catch(() => ({}))) as { ids?: unknown }
-	const ids = body.ids
-	if (!Array.isArray(ids) || ids.length > 50 || !ids.every((id) => typeof id === 'string')) {
-		return new Response('Bad Request', { status: 400 })
-	}
-	const { acked } = await ackOutbox(env.FERMI_DB, ids as string[])
-	return Response.json({ ok: true, acked })
+export function handleWaOutboxAck(request: Request, env: Env): Promise<Response> {
+	return handleOutboxAck(request, env)
 }

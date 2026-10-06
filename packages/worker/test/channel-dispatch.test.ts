@@ -11,6 +11,7 @@ interface SentMessage {
 }
 
 const sent: SentMessage[] = []
+const mediaSent: { method: string; body: Record<string, string> }[] = []
 const discordSent: { channel_id: string; content: string }[] = []
 const slackSent: { channel: string; text: string }[] = []
 
@@ -21,6 +22,18 @@ function interceptSendMessage() {
 		.reply(200, (opts) => {
 			sent.push(JSON.parse(String(opts.body)) as SentMessage)
 			return { ok: true }
+		})
+		.persist()
+}
+
+function interceptTelegramMedia() {
+	fetchMock
+		.get('https://api.telegram.org')
+		.intercept({ path: (p) => /\/send(Photo|Video|Audio|Document)$/.test(p), method: 'POST' })
+		.reply(200, (opts) => {
+			const method = opts.path.split('/').pop() ?? ''
+			mediaSent.push({ method, body: JSON.parse(String(opts.body)) })
+			return method === 'sendDocument' ? { ok: false, description: 'nope' } : { ok: true }
 		})
 		.persist()
 }
@@ -53,6 +66,7 @@ beforeAll(async () => {
 	fetchMock.activate()
 	fetchMock.disableNetConnect()
 	interceptSendMessage()
+	interceptTelegramMedia()
 	interceptDiscord()
 	interceptSlack()
 })
@@ -62,6 +76,7 @@ describe('sendChannelMessage', () => {
 		sent.length = 0
 		discordSent.length = 0
 		slackSent.length = 0
+		mediaSent.length = 0
 		await clearOutbox()
 	})
 
@@ -96,5 +111,55 @@ describe('sendChannelMessage', () => {
 		expect(slackSent[0]).toMatchObject({ channel: 'C123', text: 'slack hello' })
 		const row = await env.FERMI_DB.prepare("SELECT id FROM outbox WHERE channel = 'sl'").first()
 		expect(row).toBeNull()
+	})
+
+	const OUT = '/Users/me/fermi-daemon/media/out'
+
+	it('queues wa media on the outbox row', async () => {
+		const media = { kind: 'image' as const, path: `${OUT}/chart.png`, caption: 'Sales' }
+		await sendChannelMessage(workerEnv, 'wa', '15551234567', 'Sales', media)
+		const row = await env.FERMI_DB.prepare(
+			"SELECT body, media FROM outbox WHERE channel = 'wa'",
+		).first<{
+			body: string
+			media: string
+		}>()
+		expect(row?.body).toBe('Sales')
+		expect(JSON.parse(row?.media ?? 'null')).toEqual(media)
+	})
+
+	it('routes dc and sl media through the outbox instead of REST', async () => {
+		const media = { kind: 'document' as const, path: `${OUT}/r.pdf` }
+		await sendChannelMessage(workerEnv, 'dc', '112233', 'doc', media)
+		await sendChannelMessage(workerEnv, 'sl', 'C123', 'doc', media)
+		expect(discordSent).toHaveLength(0)
+		expect(slackSent).toHaveLength(0)
+		const rows = await env.FERMI_DB.prepare(
+			"SELECT channel, chat_id FROM outbox WHERE channel IN ('dc','sl') ORDER BY channel",
+		).all<{ channel: string; chat_id: string }>()
+		expect(rows.results).toEqual([
+			{ channel: 'dc', chat_id: '112233' },
+			{ channel: 'sl', chat_id: 'C123' },
+		])
+	})
+
+	it('sends tg media by URL with the caption and surfaces Telegram errors', async () => {
+		await sendChannelMessage(workerEnv, 'tg', '99', 'fallback caption', {
+			kind: 'image',
+			url: 'https://x.test/a.png',
+		})
+		expect(sent).toHaveLength(0)
+		expect(mediaSent).toHaveLength(1)
+		expect(mediaSent[0]).toEqual({
+			method: 'sendPhoto',
+			body: { chat_id: '99', photo: 'https://x.test/a.png', caption: 'fallback caption' },
+		})
+		await expect(
+			sendChannelMessage(workerEnv, 'tg', '99', '', {
+				kind: 'document',
+				url: 'https://x.test/r.pdf',
+			}),
+		).rejects.toThrow(/sendDocument failed: nope/)
+		expect(mediaSent[1].body).toEqual({ chat_id: '99', document: 'https://x.test/r.pdf' })
 	})
 })
