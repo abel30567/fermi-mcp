@@ -3,6 +3,8 @@ export interface FleetConfig {
 	monthly_budget_usd: number
 	max_concurrent: number
 	instance_type: string
+	/** Per-launch `instance_type` overrides must come from this list (#43). */
+	allowed_instance_types: string[]
 	claude_model: string
 	default_env: string | null
 	mcp_base_url: string | null
@@ -20,6 +22,7 @@ const DEFAULTS: FleetConfig = {
 	monthly_budget_usd: 50,
 	max_concurrent: 5,
 	instance_type: 't3.small',
+	allowed_instance_types: ['t3.small', 't3.medium', 't3.large'],
 	claude_model: 'claude-opus-4-6[1m]',
 	default_env: null,
 	mcp_base_url: null,
@@ -48,6 +51,103 @@ export async function getFleetConfig(env: Env): Promise<FleetConfig> {
 	} catch {
 		return { ...DEFAULTS }
 	}
+}
+
+/** Resolve a launch's instance type: explicit must be allowlisted, else the fleet default. */
+export function resolveInstanceType(
+	config: FleetConfig,
+	requested: string | undefined,
+): { ok: true; instance_type: string } | { ok: false; error: string; allowed: string[] } {
+	if (requested === undefined) return { ok: true, instance_type: config.instance_type }
+	if (!config.allowed_instance_types.includes(requested)) {
+		return { ok: false, error: 'instance_type_not_allowed', allowed: config.allowed_instance_types }
+	}
+	return { ok: true, instance_type: requested }
+}
+
+/**
+ * Operator-editable fleet:config fields (POST /admin/fleet/config, #43). The
+ * runner pin is deliberately excluded — it has its own fetch+hash endpoint.
+ */
+export type FleetConfigPatch = Partial<
+	Pick<
+		FleetConfig,
+		| 'instance_type'
+		| 'allowed_instance_types'
+		| 'max_concurrent'
+		| 'monthly_budget_usd'
+		| 'default_ttl_seconds'
+		| 'claude_model'
+	>
+>
+
+export function validateFleetConfigPatch(
+	current: FleetConfig,
+	body: unknown,
+): { ok: true; config: FleetConfig; patch: FleetConfigPatch } | { ok: false; error: string } {
+	if (!body || typeof body !== 'object' || Array.isArray(body)) {
+		return { ok: false, error: 'body must be an object' }
+	}
+	const b = body as Record<string, unknown>
+	const patch: FleetConfigPatch = {}
+	const isPosInt = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0
+	for (const key of Object.keys(b)) {
+		const v = b[key]
+		switch (key) {
+			case 'instance_type':
+			case 'claude_model':
+				if (typeof v !== 'string' || v.length === 0 || v.length > 64)
+					return { ok: false, error: `${key} must be a non-empty string` }
+				patch[key] = v
+				break
+			case 'allowed_instance_types':
+				if (!Array.isArray(v) || v.length === 0 || !v.every((t) => typeof t === 'string' && t))
+					return { ok: false, error: 'allowed_instance_types must be a non-empty string array' }
+				patch.allowed_instance_types = v as string[]
+				break
+			case 'max_concurrent':
+			case 'default_ttl_seconds':
+				if (!isPosInt(v)) return { ok: false, error: `${key} must be a positive integer` }
+				patch[key] = v
+				break
+			case 'monthly_budget_usd':
+				if (typeof v !== 'number' || !Number.isFinite(v) || v < 0)
+					return { ok: false, error: 'monthly_budget_usd must be a non-negative number' }
+				patch.monthly_budget_usd = v
+				break
+			default:
+				return { ok: false, error: `${key} is not an editable field` }
+		}
+	}
+	if (Object.keys(patch).length === 0) return { ok: false, error: 'no editable fields supplied' }
+	const config: FleetConfig = { ...current, ...patch }
+	if (!config.allowed_instance_types.includes(config.instance_type)) {
+		return { ok: false, error: 'instance_type must be one of allowed_instance_types' }
+	}
+	if (config.default_ttl_seconds > config.max_ttl_seconds) {
+		return {
+			ok: false,
+			error: `default_ttl_seconds exceeds max_ttl_seconds (${config.max_ttl_seconds})`,
+		}
+	}
+	return { ok: true, config, patch }
+}
+
+export async function updateFleetConfig(
+	env: Env,
+	body: unknown,
+): Promise<{ ok: true; config: FleetConfig } | { ok: false; error: string }> {
+	const current = await getFleetConfig(env)
+	const verdict = validateFleetConfigPatch(current, body)
+	if (!verdict.ok) return verdict
+	// Merge onto the raw stored object so unknown/forward fields survive.
+	const raw = await env.FERMI_KV.get('fleet:config')
+	let stored: Record<string, unknown> = {}
+	try {
+		stored = raw ? JSON.parse(raw) : {}
+	} catch {}
+	await env.FERMI_KV.put('fleet:config', JSON.stringify({ ...stored, ...verdict.patch }))
+	return { ok: true, config: verdict.config }
 }
 
 export function hourlyRate(instanceType: string): number {

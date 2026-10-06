@@ -32,6 +32,9 @@ function agent(partial: Partial<CloudAgentRow>): CloudAgentRow {
 		created_at: NOW,
 		started_at: null,
 		ended_at: null,
+		instance_type: null,
+		last_working_event_at: null,
+		restart_count: 0,
 		...partial,
 	}
 }
@@ -107,14 +110,34 @@ describe('fleet reaper planner', () => {
 		expect(plan.terminate_boxes).toHaveLength(0)
 	})
 
-	it('marks a stale-heartbeat box with a live agent offline, and terminates it without one', () => {
+	it('fails the live agent on a stale-heartbeat box as runner_stalled and terminates both stale boxes (#42)', () => {
 		const stale = NOW - 11 * 60_000
 		const busy = box({ box_id: 'box-busy', last_heartbeat_at: stale })
 		const idle = box({ box_id: 'box-idle', last_heartbeat_at: stale })
 		const a = agent({ id: 'ca_busy', box_id: 'box-busy' })
 		const plan = planFleetReap([a], [busy, idle], NOW, config)
-		expect(plan.offline_boxes).toEqual(['box-busy'])
-		expect(plan.terminate_boxes).toEqual(['box-idle'])
+		expect(plan.expire_agents).toEqual([{ id: 'ca_busy', reason: 'runner_stalled' }])
+		expect(plan.terminate_boxes.sort()).toEqual(['box-busy', 'box-idle'])
+	})
+
+	it('a fresh heartbeat keeps the agent running; stale is measured against heartbeat_stale_ms', () => {
+		const fresh = box({ box_id: 'box-fresh', last_heartbeat_at: NOW - 9 * 60_000 })
+		const a = agent({ id: 'ca_fresh', box_id: 'box-fresh', ttl_seconds: 3600 })
+		const plan = planFleetReap([a], [fresh], NOW, config)
+		expect(plan.expire_agents).toHaveLength(0)
+		expect(plan.terminate_boxes).toHaveLength(0)
+	})
+
+	it('accrues cost at the per-launch instance_type when the agent carries one (#43)', () => {
+		const a = agent({
+			id: 'ca_med',
+			box_id: 'box-1',
+			ttl_seconds: 3600,
+			started_at: NOW - 3_600_000,
+			instance_type: 't3.medium',
+		})
+		const plan = planFleetReap([a], [box({})], NOW, config)
+		expect(plan.accrue[0].cost_usd).toBeCloseTo(0.0416, 4)
 	})
 
 	it('expires a live agent at/over its budget_usd and terminates its box', () => {

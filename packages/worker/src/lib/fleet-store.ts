@@ -31,7 +31,15 @@ export interface CloudAgentRow {
 	created_at: number
 	started_at: number | null
 	ended_at: number | null
+	/** Per-launch EC2 size (#43); null = fleet default at provision time. */
+	instance_type: string | null
+	/** Liveness (#42): last `working:` progress note, and runner restarts seen. */
+	last_working_event_at: number | null
+	restart_count: number
 }
+
+/** Agent record plus its box's heartbeat, so clients check liveness without parsing events (#42). */
+export type CloudAgentView = CloudAgentRow & { last_heartbeat_at: number | null }
 
 export async function registerBox(
 	db: D1Database,
@@ -184,13 +192,14 @@ export async function createCloudAgent(
 		taskId?: string
 		budgetUsd?: number
 		ttlSeconds?: number
+		instanceType?: string
 	},
 ): Promise<CloudAgentRow> {
 	const id = input.id ?? `ca_${crypto.randomUUID()}`
 	await db
 		.prepare(
-			`INSERT INTO cloud_agents (id, box_id, task_id, queue, route, prompt, proof_contract, budget_usd, ttl_seconds, created_at)
-			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+			`INSERT INTO cloud_agents (id, box_id, task_id, queue, route, prompt, proof_contract, budget_usd, ttl_seconds, created_at, instance_type)
+			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
 		)
 		.bind(
 			id,
@@ -203,6 +212,7 @@ export async function createCloudAgent(
 			input.budgetUsd ?? null,
 			input.ttlSeconds ?? null,
 			Date.now(),
+			input.instanceType ?? null,
 		)
 		.run()
 	return (await getCloudAgent(db, id)) as CloudAgentRow
@@ -221,6 +231,9 @@ export async function updateCloudAgent(
 		costUsd?: number
 		inferenceUsd?: number
 		artifactsPrefix?: string
+		lastWorkingEventAt?: number
+		/** Adds to restart_count (atomic in SQL). */
+		restartsDelta?: number
 	},
 ): Promise<{ ok: boolean }> {
 	const sets: string[] = []
@@ -238,6 +251,11 @@ export async function updateCloudAgent(
 	if (patch.costUsd !== undefined) add('cost_usd', patch.costUsd)
 	if (patch.inferenceUsd !== undefined) add('inference_usd', patch.inferenceUsd)
 	if (patch.artifactsPrefix !== undefined) add('artifacts_prefix', patch.artifactsPrefix)
+	if (patch.lastWorkingEventAt !== undefined) add('last_working_event_at', patch.lastWorkingEventAt)
+	if (patch.restartsDelta) {
+		binds.push(patch.restartsDelta)
+		sets.push(`restart_count = restart_count + ?${binds.length}`)
+	}
 	if (sets.length === 0) return { ok: true }
 	binds.push(id)
 	const { meta } = await db
@@ -252,6 +270,14 @@ export async function getCloudAgent(db: D1Database, id: string): Promise<CloudAg
 		.prepare('SELECT * FROM cloud_agents WHERE id = ?1')
 		.bind(id)
 		.first<CloudAgentRow>()
+}
+
+export async function withBoxHeartbeat(
+	db: D1Database,
+	row: CloudAgentRow,
+): Promise<CloudAgentView> {
+	const box = row.box_id ? await getBox(db, row.box_id) : null
+	return { ...row, last_heartbeat_at: box?.last_heartbeat_at ?? null }
 }
 
 export async function listCloudAgents(

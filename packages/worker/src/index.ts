@@ -246,11 +246,31 @@ const defaultHandler = {
 			)
 			return Response.json({ ok: true, ref: b.ref, sha256, bytes: bytes.byteLength })
 		}
+		// Operator edits to fleet:config without Cloudflare KV access (#43). The
+		// runner pin stays on its own fetch+hash endpoint above.
+		if (url.pathname === '/admin/fleet/config' && request.method === 'GET') {
+			const auth = request.headers.get('authorization') ?? ''
+			if (!env.FERMI_BEARER_TOKEN || auth !== `Bearer ${env.FERMI_BEARER_TOKEN}`)
+				return new Response('Unauthorized', { status: 401 })
+			const { getFleetConfig } = await import('./lib/fleet-config.ts')
+			return Response.json({ ok: true, config: await getFleetConfig(env) })
+		}
+		if (url.pathname === '/admin/fleet/config' && request.method === 'POST') {
+			const auth = request.headers.get('authorization') ?? ''
+			if (!env.FERMI_BEARER_TOKEN || auth !== `Bearer ${env.FERMI_BEARER_TOKEN}`)
+				return new Response('Unauthorized', { status: 401 })
+			const body = await request.json().catch(() => null)
+			const { updateFleetConfig } = await import('./lib/fleet-config.ts')
+			const result = await updateFleetConfig(env, body)
+			return Response.json(result, { status: result.ok ? 200 : 400 })
+		}
 		if (url.pathname === '/admin/fleet/status' && request.method === 'GET') {
 			const auth = request.headers.get('authorization') ?? ''
 			const token = env.FERMI_BEARER_TOKEN
 			if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
-			const { getCloudAgent, listBoxes, listCloudAgents } = await import('./lib/fleet-store.ts')
+			const { getCloudAgent, listBoxes, listCloudAgents, withBoxHeartbeat } = await import(
+				'./lib/fleet-store.ts'
+			)
 			const { listTasks } = await import('./lib/task-store.ts')
 			const id = url.searchParams.get('id')
 			if (id) {
@@ -260,7 +280,7 @@ const defaultHandler = {
 				const tasks = await listTasks(env.FERMI_DB, { queue: agent.queue, limit: 5 })
 				return Response.json({
 					ok: true,
-					agent,
+					agent: await withBoxHeartbeat(env.FERMI_DB, agent),
 					tasks,
 					events: events.map((e) => ({ at: e.created_at, from: e.sender, note: e.payload })),
 					artifacts: await listAgentArtifacts(env, agent.id),

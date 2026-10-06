@@ -79,6 +79,8 @@ export async function dispatchProvision(env: Env, agent: CloudAgentRow): Promise
 		config.max_ttl_seconds,
 	)
 	const boxId = `box-${agent.id.replace(/^ca_/, '').slice(0, 8)}`
+	// Per-launch size (#43) recorded on the agent at launch; fleet default otherwise.
+	const instanceType = agent.instance_type ?? config.instance_type
 	// Per-box credential: secret only ever exists in user-data; hash at rest.
 	// Destroying the box revokes it (authBox refuses destroyed boxes).
 	const boxSecret = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll('-', '')
@@ -88,7 +90,7 @@ export async function dispatchProvision(env: Env, agent: CloudAgentRow): Promise
 		region: config.region,
 		snapshotRef: imageId,
 		meta: {
-			instance_type: config.instance_type,
+			instance_type: instanceType,
 			agent_id: agent.id,
 			token_hash: await sha256Hex(boxSecret),
 		},
@@ -96,7 +98,7 @@ export async function dispatchProvision(env: Env, agent: CloudAgentRow): Promise
 
 	const launched = await runInstance(creds, config.region, {
 		imageId,
-		instanceType: config.instance_type,
+		instanceType,
 		userData: bootstrapUserData({
 			boxId,
 			agentId: agent.id,

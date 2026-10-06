@@ -140,7 +140,8 @@ const CLOUD_AGENTS_SCHEMA = `CREATE TABLE IF NOT EXISTS cloud_agents (
   prompt TEXT NOT NULL, proof_contract TEXT NOT NULL,
   budget_usd REAL, ttl_seconds INTEGER, cost_usd REAL NOT NULL DEFAULT 0, inference_usd REAL NOT NULL DEFAULT 0,
   exit_reason TEXT, artifacts_prefix TEXT,
-  created_at INTEGER NOT NULL, started_at INTEGER, ended_at INTEGER
+  created_at INTEGER NOT NULL, started_at INTEGER, ended_at INTEGER,
+  instance_type TEXT, last_working_event_at INTEGER, restart_count INTEGER NOT NULL DEFAULT 0
 )`
 
 // Mirrors migrations/0004_secrets.sql

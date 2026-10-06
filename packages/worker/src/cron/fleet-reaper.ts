@@ -14,12 +14,12 @@ import {
 	updateBox,
 	updateCloudAgent,
 } from '../lib/fleet-store.ts'
+import { failOpenTask } from '../lib/task-store.ts'
 
 const LIVE_AGENT = new Set(['launching', 'running', 'waiting_human'])
 
 export interface ReapPlan {
 	expire_agents: { id: string; reason: string }[]
-	offline_boxes: string[]
 	terminate_boxes: string[]
 	accrue: { id: string; cost_usd: number }[]
 }
@@ -36,7 +36,8 @@ function boxInstanceType(box: BoxRow): string {
  * Pure reaping decisions so the shutdown policy is unit-testable:
  * - live agents past TTL expire (their box is terminated);
  * - boxes that never heartbeated within the provisioning grace are terminated;
- * - boxes with stale heartbeats go offline; ones with no live agent terminate;
+ * - boxes with stale heartbeats terminate; a live agent on one is failed as
+ *   `runner_stalled` right away instead of sitting `running` until TTL (#42);
  * - running agents accrue estimated cost each tick (absolute, idempotent).
  */
 export function planFleetReap(
@@ -45,9 +46,11 @@ export function planFleetReap(
 	now: number,
 	config: FleetConfig,
 ): ReapPlan {
-	const plan: ReapPlan = { expire_agents: [], offline_boxes: [], terminate_boxes: [], accrue: [] }
+	const plan: ReapPlan = { expire_agents: [], terminate_boxes: [], accrue: [] }
 	const boxById = new Map(boxes.map((b) => [b.box_id, b]))
 	const liveAgentsByBox = new Map<string, number>()
+	const heartbeatStale = (box: BoxRow | undefined) =>
+		box?.last_heartbeat_at != null && now - box.last_heartbeat_at > config.heartbeat_stale_ms
 
 	for (const agent of agents) {
 		const live = LIVE_AGENT.has(agent.status)
@@ -57,10 +60,11 @@ export function planFleetReap(
 		)
 		const expired = live && now > agent.created_at + ttlSeconds * 1000
 		const overBudget = live && agent.budget_usd != null && agent.cost_usd >= agent.budget_usd
-		if (expired || overBudget) {
+		const stalled = live && !!agent.box_id && heartbeatStale(boxById.get(agent.box_id))
+		if (expired || overBudget || stalled) {
 			plan.expire_agents.push({
 				id: agent.id,
-				reason: expired ? 'ttl_exceeded' : 'budget_exceeded',
+				reason: expired ? 'ttl_exceeded' : overBudget ? 'budget_exceeded' : 'runner_stalled',
 			})
 			if (agent.box_id) plan.terminate_boxes.push(agent.box_id)
 			continue
@@ -71,7 +75,11 @@ export function planFleetReap(
 			if (box && box.provider === 'aws' && box.instance_ref) {
 				plan.accrue.push({
 					id: agent.id,
-					cost_usd: accruedCostUsd(agent.started_at ?? agent.created_at, now, boxInstanceType(box)),
+					cost_usd: accruedCostUsd(
+						agent.started_at ?? agent.created_at,
+						now,
+						agent.instance_type ?? boxInstanceType(box),
+					),
 				})
 			}
 		}
@@ -89,12 +97,10 @@ export function planFleetReap(
 			}
 			continue
 		}
-		if (now - box.last_heartbeat_at > config.heartbeat_stale_ms) {
-			if ((liveAgentsByBox.get(box.box_id) ?? 0) === 0) {
-				plan.terminate_boxes.push(box.box_id)
-			} else if (box.status !== 'offline') {
-				plan.offline_boxes.push(box.box_id)
-			}
+		// Live agents on a stale box were already expired above (runner_stalled),
+		// so by here a stale box has nothing left to protect.
+		if (heartbeatStale(box) && (liveAgentsByBox.get(box.box_id) ?? 0) === 0) {
+			plan.terminate_boxes.push(box.box_id)
 		}
 	}
 
@@ -114,12 +120,14 @@ export async function handleFleetReaper(env: Env): Promise<void> {
 	for (const { id, cost_usd } of plan.accrue) {
 		await updateCloudAgent(env.FERMI_DB, id, { costUsd: cost_usd })
 	}
+	const agentById = new Map(agents.map((a) => [a.id, a]))
 	for (const { id, reason } of plan.expire_agents) {
 		await updateCloudAgent(env.FERMI_DB, id, { status: 'failed', endedAt: now, exitReason: reason })
+		// Fail the work task too, so an orchestrator blocked in task_wait returns
+		// now rather than timing out on a task nobody will complete (#42).
+		const taskId = agentById.get(id)?.task_id
+		if (taskId) await failOpenTask(env.FERMI_DB, taskId, reason)
 		await fleetRelease(env, id)
-	}
-	for (const boxId of plan.offline_boxes) {
-		await updateBox(env.FERMI_DB, boxId, { status: 'offline' })
 	}
 
 	const boxById = new Map(boxes.map((b) => [b.box_id, b]))
