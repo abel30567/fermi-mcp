@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import { listAgentArtifacts } from '../../channels/box-gateway.ts'
 import { fleetRelease } from '../../do/fleet-do.ts'
+import { getFleetConfig } from '../../lib/fleet-config.ts'
 import { launchCloudAgent } from '../../lib/fleet-launch.ts'
 import {
+	type CloudAgentView,
 	getCloudAgent,
 	heartbeatBox,
 	listBoxes,
@@ -10,6 +12,7 @@ import {
 	scrubBoxToken,
 	updateBox,
 	updateCloudAgent,
+	withBoxHeartbeat,
 } from '../../lib/fleet-store.ts'
 import { dispatchTeardown } from '../../lib/provisioner.ts'
 import { enqueueTask, listTasks } from '../../lib/task-store.ts'
@@ -19,6 +22,28 @@ import type { FermiMCP } from '../index.ts'
 const json = (value: unknown) => ({
 	content: [{ type: 'text' as const, text: JSON.stringify(value) }],
 })
+
+// Exit reasons set by the control plane when a runner died under the agent (#42).
+export const STALL_EXIT_REASONS = new Set(['runner_restarted', 'runner_stalled'])
+
+/**
+ * An agent is stalled when the control plane already failed it for a runner
+ * death, or when it is nominally live but its box stopped heartbeating.
+ */
+export function agentStall(
+	view: CloudAgentView,
+	now: number,
+	heartbeatStaleMs: number,
+): { stalled: false } | { stalled: true; reason: string } {
+	if (view.exit_reason && STALL_EXIT_REASONS.has(view.exit_reason)) {
+		return { stalled: true, reason: view.exit_reason }
+	}
+	const live = view.status === 'running' || view.status === 'waiting_human'
+	if (live && view.last_heartbeat_at != null && now - view.last_heartbeat_at > heartbeatStaleMs) {
+		return { stalled: true, reason: 'heartbeat_stale' }
+	}
+	return { stalled: false }
+}
 
 // Exported so the T2 gate can assert the proof-contract requirement directly.
 export const cloudAgentLaunchSchema = {
@@ -52,6 +77,12 @@ export const cloudAgentLaunchSchema = {
 		.string()
 		.optional()
 		.describe('Parent task id when this launch is part of a fan-out'),
+	instance_type: z
+		.string()
+		.optional()
+		.describe(
+			'EC2 size for this launch (must be in fleet:config.allowed_instance_types, e.g. t3.medium for Node/TypeScript builds that need 4 GiB). Defaults to the fleet instance_type.',
+		),
 }
 
 export function registerCloudAgentTools(agent: FermiMCP) {
@@ -71,7 +102,7 @@ export function registerCloudAgentTools(agent: FermiMCP) {
 	defineTool(agent, {
 		name: 'cloud_agent_get',
 		description:
-			'Get one cloud agent: its record, its work task status/result, and pending control messages.',
+			'Get one cloud agent: its record (with last_heartbeat_at, last_working_event_at, restart_count for liveness), its work task status/result, and pending control messages.',
 		schema: { id: z.string().describe('Cloud agent id') },
 		scope: ['read'],
 		risk: 'low',
@@ -84,7 +115,7 @@ export function registerCloudAgentTools(agent: FermiMCP) {
 			const events = await listTasks(env.FERMI_DB, { queue: `${row.queue}:events`, limit: 20 })
 			return json({
 				ok: true,
-				agent: row,
+				agent: await withBoxHeartbeat(env.FERMI_DB, row),
 				tasks,
 				pending_control: control,
 				events: events.map((e) => ({ at: e.created_at, from: e.sender, note: e.payload })),
@@ -133,6 +164,21 @@ export function registerCloudAgentTools(agent: FermiMCP) {
 		handler: async (args, env) => {
 			const row = await getCloudAgent(env.FERMI_DB, args.id)
 			if (!row) return json({ ok: false, error: 'not_found' })
+			// A follow-up to a dead runner would never be read: say so (#42).
+			const view = await withBoxHeartbeat(env.FERMI_DB, row)
+			const config = await getFleetConfig(env)
+			const stall = agentStall(view, Date.now(), config.heartbeat_stale_ms)
+			if (stall.stalled) {
+				return json({
+					ok: false,
+					error: 'agent_stalled',
+					status: row.status,
+					reason: stall.reason,
+					last_working_event_at: row.last_working_event_at,
+					last_heartbeat_at: view.last_heartbeat_at,
+					restart_count: row.restart_count,
+				})
+			}
 			if (['done', 'failed', 'destroyed'].includes(row.status)) {
 				return json({ ok: false, error: 'agent_finished', status: row.status })
 			}

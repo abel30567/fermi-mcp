@@ -1,5 +1,10 @@
 import { fleetRelease, fleetReserve } from '../do/fleet-do.ts'
-import { accruedCostUsd, getFleetConfig, monthSpendUsd } from './fleet-config.ts'
+import {
+	accruedCostUsd,
+	getFleetConfig,
+	monthSpendUsd,
+	resolveInstanceType,
+} from './fleet-config.ts'
 import { createCloudAgent, getBox } from './fleet-store.ts'
 import { parseProofContract } from './proof-contract.ts'
 import { type ProvisionOutcome, dispatchProvision } from './provisioner.ts'
@@ -18,6 +23,8 @@ export interface LaunchInput {
 	repo?: string
 	branch?: string
 	parent_task_id?: string
+	/** EC2 size for this launch; must be in fleet:config.allowed_instance_types (#43). */
+	instance_type?: string
 }
 
 export type LaunchResult =
@@ -41,6 +48,8 @@ export async function launchCloudAgent(env: Env, input: LaunchInput): Promise<La
 	}
 
 	const config = await getFleetConfig(env)
+	const sizing = resolveInstanceType(config, input.instance_type)
+	if (!sizing.ok) return { ok: false, error: sizing.error, allowed: sizing.allowed }
 	if (input.box_id) {
 		const box = await getBox(env.FERMI_DB, input.box_id)
 		if (!box || box.status === 'destroyed') {
@@ -57,7 +66,7 @@ export async function launchCloudAgent(env: Env, input: LaunchInput): Promise<La
 	// max-concurrent, and reserves rate×ttl against the budget. Targeting an
 	// existing (private) box provisions no compute, so it needs no reservation.
 	if (!input.box_id) {
-		const estCost = accruedCostUsd(0, ttlSeconds * 1000, config.instance_type)
+		const estCost = accruedCostUsd(0, ttlSeconds * 1000, sizing.instance_type)
 		const monthActual = await monthSpendUsd(env.FERMI_DB, Date.now())
 		const reservation = await fleetReserve(env, {
 			agent_id: agentId,
@@ -98,6 +107,7 @@ export async function launchCloudAgent(env: Env, input: LaunchInput): Promise<La
 		taskId: task.id,
 		budgetUsd: input.budget_usd,
 		ttlSeconds: input.ttl_seconds,
+		instanceType: input.box_id ? undefined : sizing.instance_type,
 	})
 	const provision = await dispatchProvision(env, created)
 	// If no compute was dispatched (provisioner error, not a targeted box), free

@@ -206,3 +206,47 @@ export async function listTasksByParent(db: D1Database, parentTaskId: string): P
 		.all<TaskRow>()
 	return results
 }
+
+/**
+ * Re-hand a box the work task it already holds (#42/#7): after a runner
+ * restart the task is still `claimed` by this box with a live lease, so
+ * claimTasks() skips it and the box would idle until TTL. Renews the lease.
+ */
+export async function reclaimOwnTask(
+	db: D1Database,
+	opts: { queue: string; claimedBy: string; leaseMs?: number },
+): Promise<ClaimedTask | null> {
+	const now = Date.now()
+	const { results } = await db
+		.prepare(
+			`UPDATE tasks SET claimed_at = ?1, lease_expires_at = ?2
+			 WHERE id IN (
+			   SELECT id FROM tasks WHERE queue = ?3 AND status = 'claimed' AND claimed_by = ?4
+			    ORDER BY created_at ASC LIMIT 1
+			 )
+			 RETURNING id, channel, sender, chat_id, payload, created_at, queue`,
+		)
+		.bind(now, now + (opts.leaseMs ?? DEFAULT_STALE_MS), opts.queue, opts.claimedBy)
+		.all<ClaimedTask>()
+	return results[0] ?? null
+}
+
+/**
+ * Control-plane failure of an open (pending/claimed) task — used when the
+ * reaper or the box gateway gives up on an agent, so task_wait returns
+ * instead of hanging on a task nobody will ever complete.
+ */
+export async function failOpenTask(
+	db: D1Database,
+	id: string,
+	result: string,
+): Promise<{ ok: boolean }> {
+	const { meta } = await db
+		.prepare(
+			`UPDATE tasks SET status = 'failed', result = ?1, completed_at = ?2
+			 WHERE id = ?3 AND status IN ('pending','claimed')`,
+		)
+		.bind(result, Date.now(), id)
+		.run()
+	return { ok: meta.changes > 0 }
+}

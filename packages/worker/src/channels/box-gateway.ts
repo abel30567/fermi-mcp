@@ -8,7 +8,14 @@ import {
 	updateCloudAgent,
 } from '../lib/fleet-store.ts'
 import { getSecret, putSecret } from '../lib/secrets-store.ts'
-import { claimTasks, completeTask, countPendingTasks, enqueueTask } from '../lib/task-store.ts'
+import {
+	claimTasks,
+	completeTask,
+	countPendingTasks,
+	enqueueTask,
+	failOpenTask,
+	reclaimOwnTask,
+} from '../lib/task-store.ts'
 
 // Inference credentials live in Fermi secrets; boxes fetch them at boot and
 // write refreshed OAuth bundles back so rotation never strands the fleet.
@@ -69,7 +76,8 @@ export async function handleBoxHeartbeat(request: Request, env: Env): Promise<Re
 /**
  * One poll returns at most one work task (leased to this box) plus every
  * pending control message (delivered exactly once — claimed and completed in
- * the same request).
+ * the same request). A task this box already holds (runner restarted mid-run,
+ * #42/#7) is handed back first with `resumed: true` and a renewed lease.
  */
 export async function handleBoxPoll(request: Request, env: Env): Promise<Response> {
 	const box = await authBox(request, env)
@@ -88,15 +96,14 @@ export async function handleBoxPoll(request: Request, env: Env): Promise<Respons
 		await completeTask(env.FERMI_DB, c.id, { result: 'delivered', claimedBy: box.box_id })
 	}
 
-	const [task] = await claimTasks(env.FERMI_DB, {
-		queue,
-		limit: 1,
-		claimedBy: box.box_id,
-		leaseMs:
-			typeof body.lease_minutes === 'number'
-				? Math.min(Math.max(body.lease_minutes, 1), 240) * 60_000
-				: undefined,
-	})
+	const leaseMs =
+		typeof body.lease_minutes === 'number'
+			? Math.min(Math.max(body.lease_minutes, 1), 240) * 60_000
+			: undefined
+	const resumed = await reclaimOwnTask(env.FERMI_DB, { queue, claimedBy: box.box_id, leaseMs })
+	const task =
+		resumed ??
+		(await claimTasks(env.FERMI_DB, { queue, limit: 1, claimedBy: box.box_id, leaseMs }))[0]
 	if (task) {
 		const agent = await getCloudAgent(env.FERMI_DB, agentId)
 		if (agent && agent.status === 'launching') {
@@ -106,6 +113,7 @@ export async function handleBoxPoll(request: Request, env: Env): Promise<Respons
 	return Response.json({
 		ok: true,
 		task: task ?? null,
+		resumed: resumed != null,
 		control: control.map((c) => JSON.parse(c.payload)),
 	})
 }
@@ -386,19 +394,55 @@ export async function handleBoxReport(request: Request, env: Env): Promise<Respo
 	const patch: Parameters<typeof updateCloudAgent>[2] = {}
 	if (body.status === 'running' || body.status === 'waiting_human') patch.status = body.status
 	if (typeof body.artifacts_prefix === 'string') patch.artifactsPrefix = body.artifacts_prefix
+	const note = typeof body.note === 'string' ? body.note : ''
+	// Liveness bookkeeping (#42): progress notes stamp last_working_event_at;
+	// a runner announcing a resume counts a restart.
+	if (note.startsWith('working:')) patch.lastWorkingEventAt = Date.now()
+	if (note.startsWith('runner restarted')) patch.restartsDelta = 1
 	await updateCloudAgent(env.FERMI_DB, agentId, patch)
-	if (typeof body.note === 'string' && body.note.length > 0) {
+	let restartedWithoutResume = false
+	if (note.startsWith('runner up')) {
+		// A fresh-boot announcement from a box whose agent already made progress
+		// and still holds its task is a runner that restarted (OOM, systemd) and
+		// will NOT resume (pre-resume runner). Fail it now and free the work
+		// task so task_wait returns and the orchestrator can relaunch (#42).
+		const agent = await getCloudAgent(env.FERMI_DB, agentId)
+		if (
+			agent?.last_working_event_at != null &&
+			(agent.status === 'running' || agent.status === 'waiting_human') &&
+			agent.task_id
+		) {
+			const task = await env.FERMI_DB.prepare('SELECT status FROM tasks WHERE id = ?1')
+				.bind(agent.task_id)
+				.first<{ status: string }>()
+			if (task?.status === 'claimed') {
+				restartedWithoutResume = true
+				await failOpenTask(env.FERMI_DB, agent.task_id, 'runner_restarted')
+				await updateCloudAgent(env.FERMI_DB, agentId, {
+					status: 'failed',
+					endedAt: Date.now(),
+					exitReason: 'runner_restarted',
+					restartsDelta: 1,
+				})
+				const { fleetRelease } = await import('../do/fleet-do.ts')
+				await fleetRelease(env, agentId)
+				// Reaper terminates the box next tick (agent no longer live).
+				await updateBox(env.FERMI_DB, box.box_id, { status: 'offline' })
+			}
+		}
+	}
+	if (note.length > 0) {
 		// Progress notes land as completed rows on the agent's events queue so
 		// orchestrators see them via cloud_agent_get without a schema change.
 		const event = await enqueueTask(env.FERMI_DB, {
 			channel: 'cloud',
 			sender: `box:${box.box_id}`,
 			chatId: 'cloud',
-			payload: body.note.slice(0, 4000),
+			payload: note.slice(0, 4000),
 			queue: `agent:${agentId}:events`,
 		})
 		await claimTasks(env.FERMI_DB, { queue: `agent:${agentId}:events`, claimedBy: box.box_id })
 		await completeTask(env.FERMI_DB, event.id, { result: 'noted', claimedBy: box.box_id })
 	}
-	return Response.json({ ok: true })
+	return Response.json({ ok: true, agent_failed: restartedWithoutResume || undefined })
 }

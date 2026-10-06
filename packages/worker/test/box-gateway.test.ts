@@ -126,12 +126,72 @@ describe('box gateway', () => {
 		expect(first.control).toEqual([{ type: 'followup', message: 'also check dark mode' }])
 		expect((await getCloudAgent(env.FERMI_DB, AGENT_ID))?.status).toBe('running')
 
+		// A re-poll from the same box (runner restarted mid-task, #42/#7) hands the
+		// held task back as a resume instead of leaving the box idle until TTL.
 		const second = (await (await handleBoxPoll(req('/box/poll'), env)).json()) as {
-			task: unknown
+			task: { id: string } | null
+			resumed: boolean
 			control: unknown[]
 		}
-		expect(second.task).toBeNull()
+		expect(second.task?.id).toBe(task.id)
+		expect(second.resumed).toBe(true)
 		expect(second.control).toEqual([])
+		expect(first.resumed).toBe(false)
+	})
+
+	it("a stranger box never receives another box's held task", async () => {
+		await seedBoxAndAgent()
+		await registerBox(env.FERMI_DB, {
+			boxId: 'box-2',
+			meta: { agent_id: AGENT_ID, token_hash: await sha256Hex('other-secret') },
+		})
+		await handleBoxPoll(req('/box/poll'), env)
+		const other = (await (
+			await handleBoxPoll(req('/box/poll', {}, 'box-2.other-secret'), env)
+		).json()) as { task: unknown; resumed: boolean }
+		expect(other.task).toBeNull()
+		expect(other.resumed).toBe(false)
+	})
+
+	it('progress notes stamp last_working_event_at; a resume announcement counts a restart (#42)', async () => {
+		await seedBoxAndAgent()
+		await handleBoxPoll(req('/box/poll'), env)
+		await handleBoxReport(req('/box/report', { note: 'runner up, route=claude' }), env)
+		let agent = await getCloudAgent(env.FERMI_DB, AGENT_ID)
+		expect(agent?.last_working_event_at).toBeNull()
+		expect(agent?.status).toBe('running') // fresh boot: nothing to fail
+
+		await handleBoxReport(req('/box/report', { note: 'working: turns=12, last tool=Bash' }), env)
+		agent = await getCloudAgent(env.FERMI_DB, AGENT_ID)
+		expect(agent?.last_working_event_at).toBeTypeOf('number')
+
+		await handleBoxReport(req('/box/report', { note: 'runner restarted; resuming t1' }), env)
+		agent = await getCloudAgent(env.FERMI_DB, AGENT_ID)
+		expect(agent).toMatchObject({ status: 'running', restart_count: 1, exit_reason: null })
+	})
+
+	it('a fresh-boot "runner up" after progress fails the agent and its task as runner_restarted (#42)', async () => {
+		const task = await seedBoxAndAgent()
+		await handleBoxPoll(req('/box/poll'), env)
+		await handleBoxReport(req('/box/report', { note: 'working: turns=60, last tool=Bash' }), env)
+
+		const res = (await (
+			await handleBoxReport(req('/box/report', { note: 'runner up, route=claude' }), env)
+		).json()) as { agent_failed?: boolean }
+		expect(res.agent_failed).toBe(true)
+		const agent = await getCloudAgent(env.FERMI_DB, AGENT_ID)
+		expect(agent).toMatchObject({
+			status: 'failed',
+			exit_reason: 'runner_restarted',
+			restart_count: 1,
+		})
+		const [row] = await listTasks(env.FERMI_DB, { queue: QUEUE })
+		expect(row.id).toBe(task.id)
+		expect(row).toMatchObject({ status: 'failed', result: 'runner_restarted' })
+		expect((await getBox(env.FERMI_DB, 'box-1'))?.status).toBe('offline')
+		// The announcement itself is still logged.
+		const events = await listTasks(env.FERMI_DB, { queue: `${QUEUE}:events` })
+		expect(events.map((e) => e.payload)).toContain('runner up, route=claude')
 	})
 
 	it('completing the main task finishes the agent; a stranger box cannot complete it', async () => {

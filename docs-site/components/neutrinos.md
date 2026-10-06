@@ -64,9 +64,11 @@ Legacy free-text contracts are grandfathered; new launches should always pass st
 | AWS access key pair | `RunInstances`/`TerminateInstances`/`DescribeInstances` | IAM policy limited to those actions, one region, your fleet security group |
 | `CLAUDE_CODE_OAUTH_TOKEN` in Fermi secrets | boxes inference on your existing Claude subscription — **inference is not billed to the budget**, EC2 wall-clock is | it's your sub; rotate from your Anthropic account |
 | `GITHUB_TOKEN` in Fermi secrets | clone/push/PR | fine-grained token, only the repos agents work |
-| `fleet:config` in KV | region, instance type, `max_concurrent`, `monthly_budget_usd`, `runner_ref`+`runner_sha256`, TTLs | set via `fleetctl` or KV directly |
+| `fleet:config` in KV | region, instance type, `allowed_instance_types`, `max_concurrent`, `monthly_budget_usd`, `runner_ref`+`runner_sha256`, TTLs | `GET`/`POST /admin/fleet/config` (bearer) for the operator fields; `pin-runner` for the pin |
 
 Cost intuition: a `t3.small` is $0.0208/hr. The 100-agent run (~6 minutes median per box) cost about **$1.60 of EC2** and zero marginal inference.
+
+Sizing: `t3.small` (2 GiB) is fine for Python-only verifiers and small fixes. Node/TypeScript builders — `tsc` on large repos, type-aware ESLint, jest/vitest, `cdk synth` — OOM-kill the harness there; launch those with `instance_type: "t3.medium"` (4 GiB). The type must be in `allowed_instance_types`, is stored on the agent, and prices its accrual.
 
 ## Operating it
 
@@ -74,9 +76,11 @@ Cost intuition: a `t3.small` is $0.0208/hr. The 100-agent run (~6 minutes median
 fleetctl pin-runner        # after ANY box-runner.mjs change — launch refuses unpinned
 cloud_agent_launch ...     # from any host
 cloud_agent_list / get     # status, exit_reason, accrued cost, inference telemetry
-cloud_agent_followup       # send a follow-up prompt to a live box
+cloud_agent_followup       # send a follow-up prompt to a live box (agent_stalled if its runner died)
 cloud_agent_stop / destroy # manual kill switch
 ```
+
+Liveness is on the agent record, not in the event log: `last_heartbeat_at` (runner check-in), `last_working_event_at` (last harness progress note), `restart_count`, `instance_type`. The reaper fails an agent `runner_stalled` and terminates its box when heartbeats go stale, and the box gateway fails it `runner_restarted` when a pre-resume runner announces a fresh boot over held work — in both cases the work task fails too, so `task_wait` returns instead of hanging until TTL.
 
 ## Failure modes
 
@@ -87,3 +91,5 @@ cloud_agent_stop / destroy # manual kill switch
 | `422 proof_unverified` loops | contract genuinely unsatisfiable | fix the contract, or let the box fail honestly |
 | Fleet tasks claimed by your Mac | ancient worker | update — fleet queues are drain-isolated |
 | Cost above budget | soft cap raced between polls | budgets bound *expected* spend; TTL bounds worst case |
+| `working: turns=N` then `runner up`, then silence | runner OOM-killed mid-task and restarted (2 GiB box, Node tooling) | runner ≥ f9befad resumes the held task; worker fails older runners as `runner_restarted`; relaunch on `t3.medium` |
+| Agent `running`, box heartbeat stale | runner process died for good | reaper fails it `runner_stalled` within `heartbeat_stale_ms` (10 min) and tears the box down |

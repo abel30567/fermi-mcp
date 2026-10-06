@@ -2,6 +2,12 @@ import { env } from 'cloudflare:test'
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import {
+	getFleetConfig,
+	resolveInstanceType,
+	updateFleetConfig,
+	validateFleetConfigPatch,
+} from '../src/lib/fleet-config.ts'
+import {
 	createCloudAgent,
 	getBox,
 	getCloudAgent,
@@ -11,9 +17,16 @@ import {
 	updateBox,
 	updateCloudAgent,
 } from '../src/lib/fleet-store.ts'
-import { claimTasks, completeTask, enqueueTask, waitForTask } from '../src/lib/task-store.ts'
+import type { CloudAgentView } from '../src/lib/fleet-store.ts'
+import {
+	claimTasks,
+	completeTask,
+	enqueueTask,
+	failOpenTask,
+	waitForTask,
+} from '../src/lib/task-store.ts'
 import { runWithGuardrails } from '../src/lib/tool.ts'
-import { cloudAgentLaunchSchema } from '../src/mcp/tools/cloud-agents.ts'
+import { agentStall, cloudAgentLaunchSchema } from '../src/mcp/tools/cloud-agents.ts'
 import {
 	clearAudit,
 	clearFleet,
@@ -107,6 +120,110 @@ describe('cloud_agent_launch schema (proof contract required)', () => {
 			proof_contract: 'before/after screenshots plus passing test output',
 		})
 		expect(parsed.route).toBe('claude')
+		expect(parsed.instance_type).toBeUndefined()
+	})
+
+	it('accepts a per-launch instance_type (#43)', () => {
+		const parsed = schema.parse({
+			prompt: 'cdk synth + jest on the platform repo',
+			proof_contract: '{"kind":"artifact","name":"out.diff","min_bytes":1}',
+			instance_type: 't3.medium',
+		})
+		expect(parsed.instance_type).toBe('t3.medium')
+	})
+})
+
+describe('fleet:config sizing and operator edits (#43)', () => {
+	beforeEach(async () => {
+		await env.FERMI_KV.delete('fleet:config')
+	})
+
+	it('resolves the fleet default when no instance_type is requested, allowlists explicit ones', async () => {
+		const config = await getFleetConfig(env)
+		expect(resolveInstanceType(config, undefined)).toEqual({ ok: true, instance_type: 't3.small' })
+		expect(resolveInstanceType(config, 't3.medium')).toEqual({
+			ok: true,
+			instance_type: 't3.medium',
+		})
+		expect(resolveInstanceType(config, 'p4d.24xlarge')).toMatchObject({
+			ok: false,
+			error: 'instance_type_not_allowed',
+		})
+	})
+
+	it('validates operator patches: editable fields only, typed, pin untouchable', async () => {
+		const config = await getFleetConfig(env)
+		expect(validateFleetConfigPatch(config, { runner_ref: 'abc' })).toMatchObject({ ok: false })
+		expect(validateFleetConfigPatch(config, { max_concurrent: 0 })).toMatchObject({ ok: false })
+		expect(validateFleetConfigPatch(config, { instance_type: 'c7g.xl' })).toMatchObject({
+			ok: false,
+		})
+		expect(validateFleetConfigPatch(config, {})).toMatchObject({ ok: false })
+		const ok = validateFleetConfigPatch(config, { instance_type: 't3.medium', max_concurrent: 8 })
+		expect(ok).toMatchObject({
+			ok: true,
+			config: { instance_type: 't3.medium', max_concurrent: 8 },
+		})
+	})
+
+	it('updateFleetConfig merges into KV without disturbing the runner pin', async () => {
+		await env.FERMI_KV.put(
+			'fleet:config',
+			JSON.stringify({ runner_ref: 'a'.repeat(40), runner_sha256: 'b'.repeat(64) }),
+		)
+		const res = await updateFleetConfig(env, { instance_type: 't3.medium', monthly_budget_usd: 75 })
+		expect(res.ok).toBe(true)
+		const stored = JSON.parse((await env.FERMI_KV.get('fleet:config')) ?? '{}')
+		expect(stored).toMatchObject({
+			instance_type: 't3.medium',
+			monthly_budget_usd: 75,
+			runner_ref: 'a'.repeat(40),
+		})
+		expect((await getFleetConfig(env)).instance_type).toBe('t3.medium')
+	})
+})
+
+describe('agent stall detection for cloud_agent_followup (#42)', () => {
+	const NOW = 1_800_000_000_000
+	const view = (p: Partial<CloudAgentView>): CloudAgentView =>
+		({
+			id: 'ca_v',
+			box_id: 'box-v',
+			task_id: 't',
+			queue: 'agent:ca_v',
+			status: 'running',
+			route: 'claude',
+			prompt: 'p',
+			proof_contract: 'c',
+			budget_usd: null,
+			ttl_seconds: null,
+			cost_usd: 0,
+			inference_usd: 0,
+			exit_reason: null,
+			artifacts_prefix: null,
+			created_at: NOW,
+			started_at: NOW,
+			ended_at: null,
+			instance_type: null,
+			last_working_event_at: null,
+			restart_count: 0,
+			last_heartbeat_at: NOW,
+			...p,
+		}) as CloudAgentView
+
+	it('flags control-plane stall exits and stale heartbeats, not healthy or plainly finished agents', () => {
+		const stale = 10 * 60_000
+		expect(agentStall(view({}), NOW, stale)).toEqual({ stalled: false })
+		expect(agentStall(view({ status: 'done', exit_reason: 'completed' }), NOW, stale)).toEqual({
+			stalled: false,
+		})
+		expect(
+			agentStall(view({ status: 'failed', exit_reason: 'runner_restarted' }), NOW, stale),
+		).toEqual({ stalled: true, reason: 'runner_restarted' })
+		expect(agentStall(view({ last_heartbeat_at: NOW - stale - 1 }), NOW, stale)).toEqual({
+			stalled: true,
+			reason: 'heartbeat_stale',
+		})
 	})
 })
 
@@ -213,5 +330,22 @@ describe('task_wait semantics', () => {
 	it('reports not_found for an unknown task id', async () => {
 		const outcome = await waitForTask(env.FERMI_DB, 'missing', { timeoutMs: 200, pollMs: 100 })
 		expect(outcome.status).toBe('not_found')
+	})
+
+	it('failOpenTask fails a claimed task so a waiter returns, and ignores finished ones', async () => {
+		const { id } = await enqueueTask(env.FERMI_DB, {
+			channel: 'cloud',
+			sender: 'orch',
+			chatId: 'cloud',
+			payload: 'work',
+			queue: 'agent:ca_reap',
+		})
+		await claimTasks(env.FERMI_DB, { queue: 'agent:ca_reap', claimedBy: 'box-r' })
+		expect((await failOpenTask(env.FERMI_DB, id, 'runner_stalled')).ok).toBe(true)
+		expect(await waitForTask(env.FERMI_DB, id, { timeoutMs: 200, pollMs: 100 })).toEqual({
+			status: 'failed',
+			result: 'runner_stalled',
+		})
+		expect((await failOpenTask(env.FERMI_DB, id, 'again')).ok).toBe(false)
 	})
 })
