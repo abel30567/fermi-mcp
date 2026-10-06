@@ -15,9 +15,10 @@ import {
 } from './channels/box-gateway.ts'
 import { handleDiscordWebhook } from './channels/discord.ts'
 import { handleNarrate } from './channels/narrate.ts'
+import { type OutboxChannel, handleOutboxAck, handleOutboxGet } from './channels/outbox-http.ts'
 import { handleSlackBridgeWebhook, handleSlackWebhook } from './channels/slack.ts'
 import { handleTelegramWebhook, setTelegramWebhook } from './channels/telegram.ts'
-import { handleWaOutboxAck, handleWaOutboxGet, handleWhatsAppWebhook } from './channels/whatsapp.ts'
+import { handleWhatsAppWebhook } from './channels/whatsapp.ts'
 import { handleCapabilityReindex } from './cron/capability-reindex.ts'
 import { handleConsolidation } from './cron/consolidation.ts'
 import { handleDailyBrief } from './cron/daily-brief.ts'
@@ -405,11 +406,12 @@ const defaultHandler = {
 		if (url.pathname === '/box/inference-auth/update' && request.method === 'POST') {
 			return handleBoxInferenceAuthUpdate(request, env)
 		}
-		if (url.pathname === '/wa/outbox' && request.method === 'GET') {
-			return handleWaOutboxGet(request, env)
-		}
-		if (url.pathname === '/wa/outbox/ack' && request.method === 'POST') {
-			return handleWaOutboxAck(request, env)
+		// Bridge outbox: GET /<wa|dc|sl>/outbox, POST /<wa|dc|sl>/outbox/ack.
+		const outboxMatch = /^\/(wa|dc|sl)\/outbox(\/ack)?$/.exec(url.pathname)
+		if (outboxMatch) {
+			const channel = outboxMatch[1] as OutboxChannel
+			if (!outboxMatch[2] && request.method === 'GET') return handleOutboxGet(request, env, channel)
+			if (outboxMatch[2] && request.method === 'POST') return handleOutboxAck(request, env)
 		}
 
 		if (url.pathname === '/dc/webhook' && request.method === 'POST') {

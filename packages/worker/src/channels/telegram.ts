@@ -4,6 +4,7 @@ import { timingSafeEqual } from '../lib/crypto.ts'
 import { wakeMacDaemon } from '../lib/mac-wake.ts'
 import { approvePairing } from '../lib/pairing.ts'
 import { enqueueTask } from '../lib/task-store.ts'
+import { type MediaKind, type OutboundMedia, mediaCaption } from './media.ts'
 
 interface TelegramMessage {
 	message_id: number
@@ -141,5 +142,42 @@ export async function sendTelegramMessage(env: Env, chatId: string, text: string
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ chat_id: chatId, text: chunk, parse_mode: 'Markdown' }),
 		})
+	}
+}
+
+const TELEGRAM_MEDIA_METHOD: Record<MediaKind, { method: string; field: string }> = {
+	image: { method: 'sendPhoto', field: 'photo' },
+	video: { method: 'sendVideo', field: 'video' },
+	audio: { method: 'sendAudio', field: 'audio' },
+	document: { method: 'sendDocument', field: 'document' },
+}
+
+/**
+ * Send one attachment by URL (Telegram fetches it). Throws on a Telegram error
+ * so the caller learns the attachment did not go out.
+ */
+export async function sendTelegramMedia(
+	env: Env,
+	chatId: string,
+	text: string,
+	media: OutboundMedia,
+): Promise<void> {
+	const token = env.TELEGRAM_BOT_TOKEN
+	if (!token) return
+	if (!media.url) throw new Error('tg media requires url')
+
+	const { method, field } = TELEGRAM_MEDIA_METHOD[media.kind]
+	const payload: Record<string, string> = { chat_id: chatId, [field]: media.url }
+	const caption = mediaCaption(media, text)
+	if (caption) payload.caption = caption
+
+	const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload),
+	})
+	const body = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string }
+	if (!res.ok || body.ok === false) {
+		throw new Error(`telegram ${method} failed: ${body.description ?? `http ${res.status}`}`)
 	}
 }
