@@ -41,11 +41,16 @@ export interface ConversationRow {
 export interface ConversationHistory {
 	messages: ConversationRow[]
 	prior_summary: string | null
+	/** created_at of the oldest message returned; pass as `before` to page back. */
+	oldest_at: number | null
+	/** True when older messages exist for this chat beyond the returned window. */
+	has_more: boolean
 }
 
 /**
  * Recent transcript for a chat, chronological. Joins on sessions.host so
  * messages survive session resets and duplicate sessions are merged.
+ * `before` (ms epoch) pages back: only messages older than it are returned.
  * prior_summary carries the newest closed session's distilled summary.
  */
 export async function getConversationHistory(
@@ -53,20 +58,25 @@ export async function getConversationHistory(
 	channel: string,
 	chatId: string,
 	limit = 20,
+	before?: number,
 ): Promise<ConversationHistory> {
 	const host = channelHost(channel, chatId)
 	const clamped = Math.min(Math.max(limit, 1), 50)
+	const cursor = before ?? Number.MAX_SAFE_INTEGER
+	// Fetch one extra row to learn whether the window is truncated.
 	const { results } = await db
 		.prepare(
 			`SELECT m.role, m.body, m.created_at
 			 FROM messages m
 			 JOIN sessions s ON m.session_id = s.id
-			 WHERE s.host = ?1
+			 WHERE s.host = ?1 AND m.created_at < ?2
 			 ORDER BY m.created_at DESC, m.id DESC
-			 LIMIT ?2`,
+			 LIMIT ?3`,
 		)
-		.bind(host, clamped)
+		.bind(host, cursor, clamped + 1)
 		.all<ConversationRow>()
+	const has_more = results.length > clamped
+	const page = results.slice(0, clamped).reverse()
 
 	const prior = await db
 		.prepare(
@@ -77,5 +87,10 @@ export async function getConversationHistory(
 		.bind(host)
 		.first<{ summary: string }>()
 
-	return { messages: results.reverse(), prior_summary: prior?.summary ?? null }
+	return {
+		messages: page,
+		prior_summary: prior?.summary ?? null,
+		oldest_at: page[0]?.created_at ?? null,
+		has_more,
+	}
 }
