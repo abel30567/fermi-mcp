@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:test'
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { handleConsolidation } from '../src/cron/consolidation.ts'
+import { fallbackSummary, handleConsolidation } from '../src/cron/consolidation.ts'
 import { logChannelMessage } from '../src/lib/conversation.ts'
 import {
 	clearMemory,
@@ -61,5 +61,55 @@ describe('consolidation channel-session distillation', () => {
 			"SELECT ended_at FROM sessions WHERE host = 'tg:99'",
 		).first<{ ended_at: number | null }>()
 		expect(session?.ended_at).toBeNull()
+	})
+
+	it('writes a fallback summary when the AI binding fails, and retries old unsummarized sessions', async () => {
+		await logChannelMessage(
+			env.FERMI_DB,
+			'wa',
+			'g@g.us',
+			'user',
+			'did you say the museum opens at nine?',
+		)
+		await logChannelMessage(env.FERMI_DB, 'wa', 'g@g.us', 'assistant', 'yes, nine on weekdays')
+		// Ended three days ago, never summarized (outside the old 24h window).
+		await env.FERMI_DB.prepare('UPDATE messages SET created_at = ?1')
+			.bind(Date.now() - 3 * 86_400_000)
+			.run()
+		await env.FERMI_DB.prepare('UPDATE sessions SET ended_at = ?1')
+			.bind(Date.now() - 3 * 86_400_000)
+			.run()
+
+		const brokenAi = {
+			...env,
+			AI: {
+				run: async () => {
+					throw new Error('ai down')
+				},
+			},
+		} as unknown as Env
+		await handleConsolidation(brokenAi)
+
+		const session = await env.FERMI_DB.prepare(
+			"SELECT summary FROM sessions WHERE host = 'wa:g@g.us'",
+		).first<{
+			summary: string | null
+		}>()
+		expect(session?.summary).toContain('auto-excerpt')
+		expect(session?.summary).toContain('museum opens at nine')
+	})
+
+	it('fallbackSummary keeps the last turns, trimmed', () => {
+		const text = fallbackSummary(
+			Array.from({ length: 10 }, (_, i) => ({
+				role: 'user',
+				body: `turn ${i} ${'x'.repeat(300)}`,
+			})),
+			{ started_at: 0, ended_at: 86_400_000 },
+		)
+		expect(text).toContain('10 messages, 1970-01-01 to 1970-01-02')
+		expect(text).toContain('turn 4')
+		expect(text).not.toContain('turn 3 ')
+		expect(text.length).toBeLessThan(1200)
 	})
 })
