@@ -268,9 +268,8 @@ const defaultHandler = {
 			const auth = request.headers.get('authorization') ?? ''
 			const token = env.FERMI_BEARER_TOKEN
 			if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
-			const { getCloudAgent, listBoxes, listCloudAgents, withBoxHeartbeat } = await import(
-				'./lib/fleet-store.ts'
-			)
+			const { getCloudAgent, listBoxes, listCloudAgents, routeHealth, withBoxHeartbeat } =
+				await import('./lib/fleet-store.ts')
 			const { listTasks } = await import('./lib/task-store.ts')
 			const id = url.searchParams.get('id')
 			if (id) {
@@ -286,10 +285,18 @@ const defaultHandler = {
 					artifacts: await listAgentArtifacts(env, agent.id),
 				})
 			}
+			const agents = await listCloudAgents(env.FERMI_DB, { limit: 50 })
 			return Response.json({
 				ok: true,
-				agents: await listCloudAgents(env.FERMI_DB, { limit: 50 }),
+				agents,
 				boxes: await listBoxes(env.FERMI_DB, { limit: 50 }),
+				// Per-route API health (#47): `unavailable` when the last N ended agents
+				// on a route all failed with the same harness api_error status.
+				routes: {
+					claude: routeHealth(agents, 'claude'),
+					codex: routeHealth(agents, 'codex'),
+					grok: routeHealth(agents, 'grok'),
+				},
 			})
 		}
 
