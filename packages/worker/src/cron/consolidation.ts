@@ -5,6 +5,7 @@ const DAY_MS = 86_400_000
 const DECAY_DAYS = 90
 const SIMILARITY_THRESHOLD = 0.95
 const CHANNEL_SESSION_IDLE_MS = 2 * 3_600_000
+const MAX_SUMMARIES_PER_RUN = 50
 
 function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 	let dot = 0
@@ -19,10 +20,25 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 	return denom === 0 ? 0 : dot / denom
 }
 
+const FALLBACK_TURNS = 6
+const FALLBACK_TURN_CHARS = 160
+
+/** Excerpt-based summary used when AI summarization is unavailable or empty. */
+export function fallbackSummary(
+	messages: { role: string; body: string }[],
+	session: { started_at: number; ended_at: number },
+): string {
+	const span = `${new Date(session.started_at).toISOString().slice(0, 10)} to ${new Date(session.ended_at).toISOString().slice(0, 10)}`
+	const tail = messages
+		.slice(-FALLBACK_TURNS)
+		.map((m) => `${m.role}: ${m.body.replace(/\s+/g, ' ').slice(0, FALLBACK_TURN_CHARS)}`)
+		.join(' | ')
+	return `(auto-excerpt, no AI summary) ${messages.length} messages, ${span}. Last turns: ${tail}`
+}
+
 export async function handleConsolidation(env: Env) {
 	const db = env.FERMI_DB
 	const now = Date.now()
-	const oneDayAgo = now - DAY_MS
 
 	// 0. Daily reset: close idle open channel sessions so step 1 summarizes
 	// them and the next inbound message starts a fresh session.
@@ -35,16 +51,20 @@ export async function handleConsolidation(env: Env) {
 		.bind(now, now - CHANNEL_SESSION_IDLE_MS)
 		.run()
 
-	// 1. Summarize sessions ended in the last 24h without a summary
+	// 1. Summarize ended sessions that still lack a summary, newest first.
+	// Not limited to the last 24h: a session whose summarization failed once
+	// must be retried, otherwise its chat never gets a prior_summary (#46).
 	const unsummarized = await db
 		.prepare(
 			`SELECT s.id, s.host, s.started_at, s.ended_at
 			 FROM sessions s
 			 WHERE s.ended_at IS NOT NULL
-			   AND s.ended_at > ?1
-			   AND s.summary IS NULL`,
+			   AND s.summary IS NULL
+			   AND EXISTS (SELECT 1 FROM messages m WHERE m.session_id = s.id)
+			 ORDER BY s.ended_at DESC
+			 LIMIT ?1`,
 		)
-		.bind(oneDayAgo)
+		.bind(MAX_SUMMARIES_PER_RUN)
 		.all<{ id: string; host: string; started_at: number; ended_at: number }>()
 
 	for (const session of unsummarized.results) {
@@ -79,12 +99,13 @@ export async function handleConsolidation(env: Env) {
 			// AI binding unavailable (local dev) - skip summarization
 		}
 
-		if (summary) {
-			await db
-				.prepare('UPDATE sessions SET summary = ?1 WHERE id = ?2')
-				.bind(summary, session.id)
-				.run()
-		}
+		// Never leave a rollover without a summary: when the model is unavailable
+		// or returns nothing, store a deterministic excerpt so the next session
+		// still sees what the chat was about.
+		await db
+			.prepare('UPDATE sessions SET summary = ?1 WHERE id = ?2')
+			.bind(summary?.trim() || fallbackSummary(messages.results, session), session.id)
+			.run()
 
 		// Distill durable facts from channel conversations into long-term memory
 		// (unpinned — normal decay/dedup below acts as the promotion gate).

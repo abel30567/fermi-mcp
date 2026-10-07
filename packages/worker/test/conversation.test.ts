@@ -66,4 +66,39 @@ describe('conversation', () => {
 		const history = await getConversationHistory(env.FERMI_DB, 'tg', '99')
 		expect(history.prior_summary).toBe('talked about teal')
 	})
+
+	it('pages back with before and reports truncation', async () => {
+		for (let i = 0; i < 5; i++) {
+			await logChannelMessage(env.FERMI_DB, 'wa', 'g@g.us', 'user', `m${i}`)
+			await env.FERMI_DB.prepare('UPDATE messages SET created_at = ?1 WHERE body = ?2')
+				.bind(1000 + i, `m${i}`)
+				.run()
+		}
+		const newest = await getConversationHistory(env.FERMI_DB, 'wa', 'g@g.us', 2)
+		expect(newest.messages.map((m) => m.body)).toEqual(['m3', 'm4'])
+		expect(newest).toMatchObject({ has_more: true, oldest_at: 1003 })
+
+		const older = await getConversationHistory(
+			env.FERMI_DB,
+			'wa',
+			'g@g.us',
+			2,
+			newest.oldest_at ?? 0,
+		)
+		expect(older.messages.map((m) => m.body)).toEqual(['m1', 'm2'])
+		expect(older.has_more).toBe(true)
+
+		const oldest = await getConversationHistory(
+			env.FERMI_DB,
+			'wa',
+			'g@g.us',
+			2,
+			older.oldest_at ?? 0,
+		)
+		expect(oldest.messages.map((m) => m.body)).toEqual(['m0'])
+		expect(oldest).toMatchObject({ has_more: false, oldest_at: 1000 })
+
+		const empty = await getConversationHistory(env.FERMI_DB, 'wa', 'nobody')
+		expect(empty).toMatchObject({ messages: [], has_more: false, oldest_at: null })
+	})
 })

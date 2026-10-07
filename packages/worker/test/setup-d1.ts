@@ -57,6 +57,24 @@ export async function setupSessionsSchema() {
 	await env.FERMI_DB.prepare(MESSAGES_SCHEMA).run()
 }
 
+// Mirrors migrations/0001_init.sql messages_fts + 0003 insert trigger
+export async function setupFtsSchema() {
+	await setupSessionsSchema()
+	await env.FERMI_DB.prepare(
+		"CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(body, content='messages', content_rowid='id')",
+	).run()
+	await env.FERMI_DB.prepare(
+		`CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+		   INSERT INTO messages_fts(rowid, body) VALUES (new.id, new.body);
+		 END`,
+	).run()
+	await env.FERMI_DB.prepare(
+		`CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+		   INSERT INTO messages_fts(messages_fts, rowid, body) VALUES('delete', old.id, old.body);
+		 END`,
+	).run()
+}
+
 export async function clearSessions() {
 	await env.FERMI_DB.prepare('DELETE FROM messages').run()
 	await env.FERMI_DB.prepare('DELETE FROM sessions').run()
