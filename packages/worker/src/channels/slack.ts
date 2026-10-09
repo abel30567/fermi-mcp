@@ -121,26 +121,42 @@ function chunkText(text: string, maxLength: number): string[] {
 	return chunks
 }
 
+function slackBotTokens(env: Env): string[] {
+	return (env.SLACK_BOT_TOKEN ?? '')
+		.split(',')
+		.map((t) => t.trim())
+		.filter(Boolean)
+}
+
 /** Send a message to a Slack channel or DM via chat.postMessage. */
 export async function sendSlackMessage(env: Env, channel: string, text: string): Promise<void> {
-	const token = env.SLACK_BOT_TOKEN
-	if (!token) return
+	const tokens = slackBotTokens(env)
+	if (tokens.length === 0) return
 
 	for (const chunk of chunkText(text, SLACK_MAX_LENGTH)) {
-		const init: RequestInit = {
-			method: 'POST',
-			headers: {
-				Authorization: `Bearer ${token}`,
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({ channel, text: chunk }),
-		}
-		const res = await fetch('https://slack.com/api/chat.postMessage', init)
-		if (res.status === 429) {
-			const retryAfter = Number(res.headers.get('retry-after') ?? '1')
-			const waitMs = Math.ceil((Number.isFinite(retryAfter) ? retryAfter : 1) * 1000)
-			await new Promise((resolve) => setTimeout(resolve, waitMs))
-			await fetch('https://slack.com/api/chat.postMessage', init)
+		for (const token of tokens) {
+			const init: RequestInit = {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${token}`,
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({ channel, text: chunk }),
+			}
+			const res = await fetch('https://slack.com/api/chat.postMessage', init)
+			if (res.status === 429) {
+				const retryAfter = Number(res.headers.get('retry-after') ?? '1')
+				const waitMs = Math.ceil((Number.isFinite(retryAfter) ? retryAfter : 1) * 1000)
+				await new Promise((resolve) => setTimeout(resolve, waitMs))
+				const retry = await fetch('https://slack.com/api/chat.postMessage', init)
+				if (retry.ok) {
+					const body = (await retry.json().catch(() => ({}))) as { ok?: boolean }
+					if (body.ok) break
+				}
+				continue
+			}
+			const body = (await res.json().catch(() => ({}))) as { ok?: boolean }
+			if (body.ok) break
 		}
 	}
 }
