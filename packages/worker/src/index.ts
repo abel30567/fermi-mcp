@@ -297,7 +297,8 @@ const defaultHandler = {
 			const auth = request.headers.get('authorization') ?? ''
 			const token = env.FERMI_BEARER_TOKEN
 			if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
-			return Response.json({ pending: await countPendingTasks(env.FERMI_DB) })
+			const queue = url.searchParams.get('queue') || undefined
+			return Response.json({ pending: await countPendingTasks(env.FERMI_DB, queue) })
 		}
 
 		if (url.pathname === '/capabilities') {
