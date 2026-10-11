@@ -1,6 +1,8 @@
 import awsCdkDiscipline from '../../seeds/skills/aws-cdk-discipline/SKILL.md'
 import browserAuthSpa from '../../seeds/skills/browser-auth-spa/SKILL.md'
 import githubApi from '../../seeds/skills/github-api/SKILL.md'
+import grokBotHandoff from '../../seeds/skills/grok-bot-handoff/SKILL.md'
+import grokBotInbox from '../../seeds/skills/grok-bot-inbox/SKILL.md'
 import shopifyAdmin from '../../seeds/skills/shopify-admin/SKILL.md'
 import totpOauth from '../../seeds/skills/totp-oauth/SKILL.md'
 import { normalizeSkillDocument, skillR2Key, upsertSkill } from '../lib/skills-store.ts'
@@ -11,6 +13,8 @@ const SEED_SKILLS: Array<{ slug: string; body: string }> = [
 	{ slug: 'browser-auth-spa', body: browserAuthSpa },
 	{ slug: 'aws-cdk-discipline', body: awsCdkDiscipline },
 	{ slug: 'shopify-admin', body: shopifyAdmin },
+	{ slug: 'grok-bot-handoff', body: grokBotHandoff },
+	{ slug: 'grok-bot-inbox', body: grokBotInbox },
 ]
 
 export interface SeedSkillsResult {
