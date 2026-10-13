@@ -122,23 +122,18 @@ export async function hasOpenTaskFromSender(db: D1Database, sender: string): Pro
 	return row != null
 }
 
+/**
+ * Pending tasks on one queue. Unscoped = DEFAULT_QUEUE: that is the CHANNEL
+ * drain's wake signal (/admin/tasks/pending → the Mac warm worker, poll.sh),
+ * and the drain only ever claims DEFAULT_QUEUE. Counting other queues woke it
+ * for work it can never claim: fleet queues (agent:*, broker:*) made it steal
+ * box tasks (2026-09-08), and external consumers' queues (grok-bot,
+ * fermi-mcp#12) would re-fire empty drain turns until their owner claimed.
+ */
 export async function countPendingTasks(db: D1Database, queue?: string): Promise<number> {
-	if (queue) {
-		const row = await db
-			.prepare("SELECT COUNT(*) AS n FROM tasks WHERE status = 'pending' AND queue = ?1")
-			.bind(queue)
-			.first<{ n: number }>()
-		return row?.n ?? 0
-	}
-	// Unscoped count is the CHANNEL drain's signal (/admin/tasks/pending → the
-	// Mac warm worker). Fleet queues (agent:<id> work tasks, broker:ops) are
-	// drained by boxes and the broker executor, NOT the channel drain — counting
-	// them here woke the drain, which then claimed cloud-agent tasks out from
-	// under their boxes (2026-09-08). Exclude them.
 	const row = await db
-		.prepare(
-			"SELECT COUNT(*) AS n FROM tasks WHERE status = 'pending' AND queue NOT LIKE 'agent:%' AND queue NOT LIKE 'broker:%'",
-		)
+		.prepare("SELECT COUNT(*) AS n FROM tasks WHERE status = 'pending' AND queue = ?1")
+		.bind(queue ?? DEFAULT_QUEUE)
 		.first<{ n: number }>()
 	return row?.n ?? 0
 }
