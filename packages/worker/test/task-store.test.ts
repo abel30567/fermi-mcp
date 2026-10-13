@@ -263,30 +263,20 @@ describe('fleet queues isolated from channel drain (2026-09-08 SCA incident)', (
 	beforeEach(async () => {
 		await clearTasks()
 	})
-	it('unscoped pending count excludes agent:* and broker:* queues', async () => {
-		await enqueueTask(env.FERMI_DB, {
-			channel: 'wa',
-			sender: 'u',
-			chatId: 'c',
-			payload: '{}',
-			queue: 'default',
-		})
-		await enqueueTask(env.FERMI_DB, {
-			channel: 'cloud',
-			sender: 'x',
-			chatId: 'c',
-			payload: '{}',
-			queue: 'agent:ca_x',
-		})
-		await enqueueTask(env.FERMI_DB, {
-			channel: 'broker',
-			sender: 'x',
-			chatId: 'c',
-			payload: '{}',
-			queue: 'broker:ops',
-		})
+	it('unscoped pending count is the default queue only (fleet + grok-bot excluded)', async () => {
+		await enqueueTask(env.FERMI_DB, { channel: 'wa', sender: 'u', chatId: 'c', payload: '{}' })
+		for (const queue of ['agent:ca_x', 'broker:ops', 'grok-bot']) {
+			await enqueueTask(env.FERMI_DB, {
+				channel: 'cloud',
+				sender: 'x',
+				chatId: 'c',
+				payload: '{}',
+				queue,
+			})
+		}
 		expect(await countPendingTasks(env.FERMI_DB)).toBe(1) // only the default-queue channel task
 		expect(await countPendingTasks(env.FERMI_DB, 'agent:ca_x')).toBe(1) // explicit scope still sees it
+		expect(await countPendingTasks(env.FERMI_DB, 'grok-bot')).toBe(1)
 	})
 	it('isFleetQueue classifies correctly', () => {
 		expect(_ifq('agent:ca_1')).toBe(true)
