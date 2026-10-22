@@ -131,9 +131,11 @@ function slackBotTokens(env: Env): string[] {
 /** Send a message to a Slack channel or DM via chat.postMessage. */
 export async function sendSlackMessage(env: Env, channel: string, text: string): Promise<void> {
 	const tokens = slackBotTokens(env)
-	if (tokens.length === 0) return
+	if (tokens.length === 0) throw new Error('slack: SLACK_BOT_TOKEN not configured')
 
 	for (const chunk of chunkText(text, SLACK_MAX_LENGTH)) {
+		const errors: string[] = []
+		let sent = false
 		for (const token of tokens) {
 			const init: RequestInit = {
 				method: 'POST',
@@ -149,14 +151,21 @@ export async function sendSlackMessage(env: Env, channel: string, text: string):
 				const waitMs = Math.ceil((Number.isFinite(retryAfter) ? retryAfter : 1) * 1000)
 				await new Promise((resolve) => setTimeout(resolve, waitMs))
 				const retry = await fetch('https://slack.com/api/chat.postMessage', init)
-				if (retry.ok) {
-					const body = (await retry.json().catch(() => ({}))) as { ok?: boolean }
-					if (body.ok) break
+				const body = (await retry.json().catch(() => ({}))) as { ok?: boolean; error?: string }
+				if (body.ok) {
+					sent = true
+					break
 				}
+				errors.push(body.error ?? `http ${retry.status}`)
 				continue
 			}
-			const body = (await res.json().catch(() => ({}))) as { ok?: boolean }
-			if (body.ok) break
+			const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
+			if (body.ok) {
+				sent = true
+				break
+			}
+			errors.push(body.error ?? `http ${res.status}`)
 		}
+		if (!sent) throw new Error(`slack chat.postMessage failed for ${channel}: ${errors.join(', ')}`)
 	}
 }
