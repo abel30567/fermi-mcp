@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:test'
-import { expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { describeTool } from './describe-tool.ts'
 import { McpClient, resultJson } from './mcp-client.ts'
 
@@ -11,6 +11,9 @@ async function session() {
 	await client.initialize()
 	return client
 }
+
+// plans rows reference sessions; drop them so other files can reset sessions.
+afterEach(() => env.FERMI_DB.prepare('DELETE FROM plans').run())
 
 const text = (result: { content: Array<{ text?: string }> }) => result.content[0]?.text ?? ''
 
