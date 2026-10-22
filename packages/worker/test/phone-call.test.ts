@@ -5,6 +5,7 @@ import {
 	type PhoneConfig,
 	appendTranscript,
 	buildDialParams,
+	buildLiveInstructions,
 	buildLiveSession,
 	buildNotifyPayload,
 	buildSummaryRequest,
@@ -305,6 +306,16 @@ describe('call record helpers', () => {
 			'agent:Hi, I am calling about',
 			'agent:a new topic',
 		])
+	})
+
+	it("introduces the voice agent as an assistant calling on the user's behalf", () => {
+		const instructions = buildLiveInstructions(record())
+		expect(instructions).toContain("an assistant calling on the user's behalf")
+		// The sentence the agent is told to introduce itself with, before the "—" guard clause.
+		const intro = /Introduce yourself[^—.]*/.exec(instructions)?.[0] ?? ''
+		expect(intro).toBe("Introduce yourself simply as an assistant calling on the user's behalf ")
+		expect(intro).not.toContain('AI assistant')
+		expect(instructions).toContain('do not call yourself an AI assistant when introducing yourself')
 	})
 
 	it('builds a GPT-Live session with PCMU pass-through and the call tools', () => {
