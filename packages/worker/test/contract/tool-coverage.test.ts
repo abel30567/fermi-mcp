@@ -6,7 +6,8 @@ import uncovered from './uncovered.json'
 // somewhere in test/contract, or an entry in uncovered.json. Coverage is read from
 // the test sources themselves, so parallel PRs never edit a shared manifest.
 
-// uncovered.json may only shrink: never raise this ceiling.
+// Equals the number of entries in uncovered.json. It may only go down: a PR that
+// covers tools removes them from uncovered.json and lowers this to the new count.
 const UNCOVERED_CEILING = 120
 
 const SOURCES = import.meta.glob<string>(['./**/*.ts', '!./tool-coverage.test.ts'], {
