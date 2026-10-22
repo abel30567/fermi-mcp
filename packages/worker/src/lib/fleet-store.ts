@@ -298,3 +298,49 @@ export async function listCloudAgents(
 		.all<CloudAgentRow>()
 	return results
 }
+
+/** Consecutive same-status API failures on a route before it is flagged unavailable. */
+export const ROUTE_UNAVAILABLE_THRESHOLD = 3
+const API_ERROR_RE = /^harness api_error ([^\s:]+)/
+
+export interface RouteHealth {
+	route: CloudAgentRow['route']
+	unavailable: boolean
+	/** Leading run of ended agents on this route that failed with the same API error. */
+	consecutive_api_errors: number
+	api_error_status: string | null
+	/** exit_reason of the most recent such failure (the message the API returned). */
+	last_error: string | null
+	since: number | null
+}
+
+/**
+ * Fleet-wide route health from the agent list (#47): if the N most recently
+ * ended agents on a route all died with the same `harness api_error <status>`
+ * (spend cap, 429, auth), orchestrators should stop relaunching into it.
+ */
+export function routeHealth(agents: CloudAgentRow[], route: CloudAgentRow['route']): RouteHealth {
+	const ended = agents
+		.filter((a) => a.route === route && a.ended_at != null)
+		.sort((a, b) => (b.ended_at ?? 0) - (a.ended_at ?? 0))
+	let status: string | null = null
+	let count = 0
+	let since: number | null = null
+	let lastError: string | null = null
+	for (const a of ended) {
+		const m = a.exit_reason ? API_ERROR_RE.exec(a.exit_reason) : null
+		if (!m || (status !== null && m[1] !== status)) break
+		status = m[1]
+		count++
+		since = a.ended_at
+		lastError ??= a.exit_reason
+	}
+	return {
+		route,
+		unavailable: count >= ROUTE_UNAVAILABLE_THRESHOLD,
+		consecutive_api_errors: count,
+		api_error_status: status,
+		last_error: lastError,
+		since,
+	}
+}
