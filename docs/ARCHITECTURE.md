@@ -404,9 +404,9 @@ that step rather than fail.
 
 | Store | Binding | Holds |
 |-------|---------|-------|
-| D1 | `FERMI_DB` | memory, sessions, messages + `messages_fts`, audit log, hooks, `team_spawns`, skills metadata, secrets metadata, connectors, packages, retrievers, OAuth clients/grants |
+| D1 | `FERMI_DB` | memory, sessions, messages + `messages_fts`, audit log, hooks, `team_spawns`, skills metadata, secrets metadata, connectors, packages, retrievers, OAuth clients/grants, approval tokens |
 | R2 | `FERMI_BUCKET` | SKILL.md bodies, `fs_*` user files, `/apps/*` static assets, seeds |
-| KV | `FERMI_KV` | runtime config (daily-brief channel/chat), approval tokens, `team:max_concurrent`, allow-lists |
+| KV | `FERMI_KV` | runtime config (daily-brief channel/chat), `team:max_concurrent`, allow-lists |
 | KV | `OAUTH_KV` | OAuth tokens/grants for the provider |
 | Workers AI | `AI` | `bge-small-en-v1.5` embeddings; Llama 3.1-8B summaries and channel inference fallback |
 | Vectorize | `FERMI_VECTORIZE` | `capability:*` and `skill:*` vectors |
