@@ -7,9 +7,9 @@ The full, source-anchored description lives in [`docs/ARCHITECTURE.md`](https://
 ## Who owns what
 
 - **`FermiMCP` (Durable Object)** owns the MCP session — tool registration, the guardrail pipeline (plan-mode check → approval gate for `risk: high` → deny-hooks → execute + audit).
-- **D1** owns memory, messages (+FTS), skills metadata, secrets metadata, audit, hooks, tasks, fleet state, web-session metadata.
+- **D1** owns memory, messages (+FTS), skills metadata, secrets metadata, audit, hooks, approval tokens, tasks, fleet state, web-session metadata.
 - **R2** owns SKILL.md bodies, files, `/apps/*` static hosting, artifacts.
-- **KV** owns runtime config (`fleet:config`), approval tokens, allowlists.
+- **KV** owns runtime config (`fleet:config`), allowlists.
 - **The task queue (D1 `tasks`)** is the spine connecting everything: channels enqueue, daemons and boxes claim, `task_wait` lets an orchestrator await completion. Queues are namespaced strings; `agent:<id>` and `broker:ops` are fleet-owned and **off-limits to the channel drain** (`isFleetQueue`, `lib/task-store.ts`) — a lesson paid for in production, see [the task-theft incident](/blog/03-task-theft).
 
 ## Tool surface
