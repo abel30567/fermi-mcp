@@ -2,11 +2,7 @@ import path from 'node:path'
 import { defineWorkersConfig, readD1Migrations } from '@cloudflare/vitest-pool-workers/config'
 
 export default defineWorkersConfig(async () => {
-	// Schema only: 0002_seed.sql inserts a message before 0003 adds the FTS triggers, so the
-	// row is missing from messages_fts and deleting it fails with SQLITE_CORRUPT.
-	const migrations = (await readD1Migrations(path.join(__dirname, 'migrations'))).filter(
-		(m) => m.name !== '0002_seed.sql',
-	)
+	const migrations = await readD1Migrations(path.join(__dirname, 'migrations'))
 
 	return {
 		test: {
