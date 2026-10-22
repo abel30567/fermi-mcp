@@ -76,20 +76,45 @@ describeTool('team_spawn', () => {
 		expect(row?.ended_at).toBeGreaterThan(0)
 	})
 
-	// Documents current behaviour: allowed_tools is accepted but ignored, so the
-	// subagent is offered the same tool set either way (follow-up filed in the PR).
-	it('ignores allowed_tools: the subagent gets the full inference tool set', async () => {
-		const unrestricted = anthropic('ok')
+	it('offers the full curated tool set when allowed_tools is omitted', async () => {
+		const seen = anthropic('ok')
 		await client.callTool('team_spawn', { role: 'writer', instructions: 'Draft a note' })
-		const restricted = anthropic('ok')
+		expect(seen[0].body.tools.map((t) => t.name)).toEqual([
+			'memory_recall',
+			'memory_write',
+			'search',
+			'fs_read',
+			'fs_list',
+		])
+	})
+
+	it('restricts the subagent to the allowed_tools subset', async () => {
+		const seen = anthropic('ok')
 		await client.callTool('team_spawn', {
 			role: 'writer',
 			instructions: 'Draft a note',
 			allowed_tools: ['memory_recall'],
 		})
-		const names = (r: MessagesRequest[]) => r[0].body.tools.map((t) => t.name)
-		expect(names(restricted)).toEqual(names(unrestricted))
-		expect(names(restricted)).toContain('memory_write')
+		expect(seen[0].body.tools.map((t) => t.name)).toEqual(['memory_recall'])
+	})
+
+	it('rejects an unknown allowed_tools name before spawning', async () => {
+		const seen = anthropic('ok')
+		const result = resultJson<{ error: string; unknown: string[]; available: string[] }>(
+			await client.callTool('team_spawn', {
+				role: 'writer',
+				instructions: 'Draft a note',
+				allowed_tools: ['memory_recall', 'shell_exec'],
+			}),
+		)
+		expect(result.error).toBe('Unknown tool in allowed_tools')
+		expect(result.unknown).toEqual(['shell_exec'])
+		expect(result.available).toContain('memory_recall')
+		expect(seen).toHaveLength(0)
+		const spawns = await env.FERMI_DB.prepare('SELECT COUNT(*) AS n FROM team_spawns').first<{
+			n: number
+		}>()
+		expect(spawns?.n).toBe(0)
 	})
 
 	it('refuses to spawn past team:max_concurrent and calls no model', async () => {
