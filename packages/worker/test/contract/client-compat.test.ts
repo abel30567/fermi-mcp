@@ -3,6 +3,11 @@ import { McpClient, type Tool } from './mcp-client.ts'
 
 // Client-compatibility lint: the subset of JSON Schema that strict MCP clients
 // (OpenAI and Gemini function calling) accept, checked on the live tools/list.
+//
+// Known client limitation: Gemini's strict subset accepts only `enum` and
+// `date-time` as string formats. `uri` and `uuid` are still allowed here because
+// tools rely on zod's .url() and .uuid() for validation, so Gemini-strict clients
+// may reject the tools that use them.
 
 const NAME = /^[a-zA-Z0-9_-]{1,64}$/
 const FORBIDDEN_ROOT_KEYS = ['$ref', 'oneOf', 'allOf']
