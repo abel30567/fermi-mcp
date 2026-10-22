@@ -15,7 +15,7 @@ export const PHONE_REQUIRED_CONFIG = [
 ] as const
 
 const PHONE_DEFAULTS = {
-	TWILIO_API_BASE: 'https://api.twilio.com', // override only for scripts/phone-sim.mjs
+	TWILIO_API_BASE: 'https://api.twilio.com', // override only for scripts/phone-sim.mjs and the eval target
 	OPENAI_LIVE_MODEL: 'gpt-live-1',
 	OPENAI_LIVE_BACKEND_MODEL: 'gpt-6-luna',
 	OPENAI_LIVE_VOICE: 'marin',
