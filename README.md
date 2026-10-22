@@ -137,7 +137,7 @@ bun run dev            # wrangler dev --local
 bun run check          # Biome lint + format check
 bun run format         # auto-format
 bun run migrate:local  # apply D1 migrations locally
-bun run test           # vitest (worker package)
+bun run test           # vitest (worker package): unit + MCP contract projects
 ```
 
 ## Configuration
