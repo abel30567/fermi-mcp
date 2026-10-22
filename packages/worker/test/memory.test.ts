@@ -18,13 +18,21 @@ beforeEach(async () => {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+// Pin created_at explicitly: two writes can land on the same Date.now() tick under load.
+async function setCreatedAt(id: number, createdAt: number) {
+	await env.FERMI_DB.prepare('UPDATE memory SET created_at = ?1 WHERE id = ?2')
+		.bind(createdAt, id)
+		.run()
+}
+
 describe('listRecentMemories', () => {
 	it('returns memories in descending created_at order', async () => {
-		await writeMemory({ kind: 'fact', body: 'one' }, env)
-		await sleep(5)
-		await writeMemory({ kind: 'fact', body: 'two' }, env)
-		await sleep(5)
-		await writeMemory({ kind: 'fact', body: 'three' }, env)
+		const one = await writeMemory({ kind: 'fact', body: 'one' }, env)
+		const two = await writeMemory({ kind: 'fact', body: 'two' }, env)
+		const three = await writeMemory({ kind: 'fact', body: 'three' }, env)
+		await setCreatedAt(one.id, 1_000)
+		await setCreatedAt(two.id, 2_000)
+		await setCreatedAt(three.id, 3_000)
 		const r = await listRecentMemories(10, env)
 		expect(r.map((m) => m.body)).toEqual(['three', 'two', 'one'])
 	})
@@ -55,9 +63,10 @@ describe('listRecentMemories', () => {
 
 describe('recallMemories sort_by', () => {
 	it("sort_by='created_at' ignores pinned ordering (newest wins)", async () => {
-		await writeMemory({ kind: 'fact', body: 'matchword old', pinned: true }, env)
-		await sleep(5)
+		const old = await writeMemory({ kind: 'fact', body: 'matchword old', pinned: true }, env)
 		const fresh = await writeMemory({ kind: 'fact', body: 'matchword fresh' }, env)
+		await setCreatedAt(old.id, 1_000)
+		await setCreatedAt(fresh.id, 2_000)
 		const r = await recallMemories('matchword', 10, env, 'created_at')
 		expect(r[0].id).toBe(fresh.id)
 	})
