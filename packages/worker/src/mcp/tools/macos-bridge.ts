@@ -371,7 +371,8 @@ export function registerMacOSBridgeTools(agent: FermiMCP) {
 
 	defineTool(agent, {
 		name: 'mac_screen_ocr',
-		description: '[Local Mac] Capture screenshot and OCR via macOS Vision framework.',
+		description:
+			'[Local Mac] Capture screenshot and OCR via macOS Vision framework. Returns text lines with clickable screen-point x,y centers.',
 		schema: {
 			region: z.string().optional().describe('Region as "x,y,width,height"'),
 		},
@@ -433,12 +434,31 @@ export function registerMacOSBridgeTools(agent: FermiMCP) {
 	})
 
 	defineTool(agent, {
+		name: 'mac_chrome_open',
+		description:
+			'[Local Mac] Open a URL in plain Chrome on a named persistent profile (no debug port). Drive it with mac_click / mac_keystroke / mac_screen_ocr. Use for sites that flag CDP-driven browsers.',
+		schema: {
+			label: z.string().describe('Profile label (same namespace as mac_browser_launch)'),
+			url: z.string().describe('URL to open'),
+		},
+		scope: ['browser:local'],
+		risk: 'med',
+		mutates: true,
+		handler: async (args, env) => callRemoteTool(env, 'mac_chrome_open', args),
+	})
+
+	defineTool(agent, {
 		name: 'mac_keystroke',
 		description: '[Local Mac] Simulate keyboard input via AppleScript System Events.',
 		schema: {
-			keys: z.string().describe('Keys to type'),
+			keys: z
+				.string()
+				.describe(
+					'Text to type, or a named key (return, tab, escape, space, delete, up, down, ...)',
+				),
 			modifiers: z.array(z.string()).optional().describe('Modifier keys'),
 			app: z.string().optional().describe('Target application'),
+			human: z.boolean().optional().describe('Type with randomized human-like delays'),
 		},
 		scope: ['shell'],
 		risk: 'high',
@@ -454,6 +474,7 @@ export function registerMacOSBridgeTools(agent: FermiMCP) {
 			y: z.number().describe('Y coordinate'),
 			button: z.enum(['left', 'right', 'middle']).optional().describe('Mouse button'),
 			double: z.boolean().optional().describe('Double click'),
+			human: z.boolean().optional().describe('Glide the pointer with easing before clicking'),
 		},
 		scope: ['shell'],
 		risk: 'high',
