@@ -9,23 +9,11 @@
 			"body": "The eval owner's dentist is Dr. Example, +15555550100.",
 			"pinned": true
 		},
-		{
-			"kind": "preference",
-			"body": "Prefers morning appointments.",
-			"pinned": false
-		}
+		{ "kind": "preference", "body": "Prefers morning appointments.", "pinned": false }
 	],
 	"allowlist": [
-		{
-			"channel": "sl",
-			"sender_id": "U0EVALOWNER",
-			"note": "owner"
-		},
-		{
-			"channel": "tg",
-			"sender_id": "1000001",
-			"note": "owner"
-		}
+		{ "channel": "sl", "sender_id": "U0EVALOWNER", "note": "owner" },
+		{ "channel": "tg", "sender_id": "1000001", "note": "owner" }
 	],
 	"tasks": [
 		{
