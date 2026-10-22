@@ -36,5 +36,9 @@ declare global {
 		MACOS_MCP_URL?: string
 		MACOS_MCP_TOKEN?: string
 		FERMI_PUBLIC_URL?: string
+		SLACK_API_BASE?: string
+		TELEGRAM_API_BASE?: string
+		DISCORD_API_BASE?: string
+		ANTHROPIC_API_BASE?: string
 	}
 }

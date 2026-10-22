@@ -1,0 +1,33 @@
+{
+	"profile": {
+		"agent": "Eval instance. Reply in the channel the task came from.",
+		"user": "Name: Eval Owner. Prefers short answers."
+	},
+	"memories": [
+		{
+			"kind": "fact",
+			"body": "The eval owner's dentist is Dr. Example, +15555550100.",
+			"pinned": true
+		},
+		{ "kind": "preference", "body": "Prefers morning appointments.", "pinned": false }
+	],
+	"allowlist": [
+		{ "channel": "sl", "sender_id": "U0EVALOWNER", "note": "owner" },
+		{ "channel": "tg", "sender_id": "1000001", "note": "owner" }
+	],
+	"tasks": [
+		{
+			"id": "eval-task-1",
+			"channel": "sl",
+			"sender": "U0EVALOWNER",
+			"chat_id": "C0EVAL",
+			"payload": "What is my dentist's phone number?"
+		}
+	],
+	"skills": [
+		{
+			"slug": "household-finance",
+			"body": "---\nname: Household finance\ndescription: Eval stub for the household finance channel.\nkeywords: [budget, bills, finance]\n---\nEval stub. Answer budget and bill questions from memory; never move money.\n"
+		}
+	]
+}

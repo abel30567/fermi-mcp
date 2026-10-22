@@ -1,4 +1,5 @@
 import { isAllowed } from '../lib/allowlist-store.ts'
+import { apiBase } from '../lib/api-base.ts'
 import { logChannelMessage } from '../lib/conversation.ts'
 import { timingSafeEqual } from '../lib/crypto.ts'
 import { approvePairing } from '../lib/pairing.ts'
@@ -153,6 +154,7 @@ function slackBotTokens(env: Env): string[] {
 export async function sendSlackMessage(env: Env, channel: string, text: string): Promise<void> {
 	const tokens = slackBotTokens(env)
 	if (tokens.length === 0) throw new Error('slack: SLACK_BOT_TOKEN not configured')
+	const url = `${apiBase(env, 'SLACK_API_BASE')}/api/chat.postMessage`
 
 	for (const chunk of chunkText(text, SLACK_MAX_LENGTH)) {
 		const errors: string[] = []
@@ -166,12 +168,12 @@ export async function sendSlackMessage(env: Env, channel: string, text: string):
 				},
 				body: JSON.stringify({ channel, text: chunk }),
 			}
-			const res = await fetch('https://slack.com/api/chat.postMessage', init)
+			const res = await fetch(url, init)
 			if (res.status === 429) {
 				const retryAfter = Number(res.headers.get('retry-after') ?? '1')
 				const waitMs = Math.ceil((Number.isFinite(retryAfter) ? retryAfter : 1) * 1000)
 				await new Promise((resolve) => setTimeout(resolve, waitMs))
-				const retry = await fetch('https://slack.com/api/chat.postMessage', init)
+				const retry = await fetch(url, init)
 				const body = (await retry.json().catch(() => ({}))) as { ok?: boolean; error?: string }
 				if (body.ok) {
 					sent = true

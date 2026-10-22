@@ -122,10 +122,48 @@ describe('MCP contract: defineTool guardrails', () => {
 		expect(rows.results).toEqual([])
 	})
 
-	// The redeem leg checks token existence only (docs/ARCHITECTURE.md "the stored
-	// args_hash is not re-compared"), so a token minted for one set of args currently
-	// redeems a different set.
-	it.todo('a high-risk tool rejects its token when redeemed with different args — fixed by MCP-19')
+	it('an approval token redeems only for the tool and args it was minted for', async () => {
+		const client = await session()
+		// retriever_delete and oauth_delete_client share the schema { name }, so the
+		// cross-tool redeem below presents an identical args_hash and isolates the tool check.
+		const argsA = { name: 'contract_r4' }
+		const denied = { status: 'denied', reason: 'Invalid or expired approval token' }
+
+		const pending = resultJson<{ status: string; token: string }>(
+			await client.callTool('retriever_delete', argsA),
+		)
+		expect(pending.status).toBe('pending_approval')
+		const approval_token = pending.token
+
+		const otherArgs = resultJson(
+			await client.callTool('retriever_delete', { name: 'contract_other', approval_token }),
+		)
+		expect(otherArgs).toEqual(denied)
+
+		const otherTool = resultJson(
+			await client.callTool('oauth_delete_client', { ...argsA, approval_token }),
+		)
+		expect(otherTool).toEqual(denied)
+
+		// the mismatched attempts did not consume the token: the minted call still redeems
+		const redeemed = resultJson(
+			await client.callTool('retriever_delete', { ...argsA, approval_token }),
+		)
+		expect(redeemed).toEqual({ name: 'contract_r4', deleted: false })
+
+		const replay = resultJson(
+			await client.callTool('retriever_delete', { ...argsA, approval_token }),
+		)
+		expect(replay).toEqual(denied)
+
+		expect((await auditRows('retriever_delete')).map((r) => r.outcome)).toEqual([
+			'pending',
+			'denied',
+			'ok',
+			'denied',
+		])
+		expect((await auditRows('oauth_delete_client')).map((r) => r.outcome)).toEqual(['denied'])
+	})
 
 	it('a tool:before hook with trust deny blocks the call', async () => {
 		const client = await session()
@@ -176,9 +214,7 @@ describe('MCP contract: defineTool guardrails', () => {
 		await expectOneRow('retriever_get', { name: 'contract_r3' }, 'denied')
 	})
 
-	// Current contract: the plan-mode branch returns before writeAudit. MCP-19 makes it
-	// write one 'denied' row; flip this test to expect that.
-	it('plan-mode denial currently writes no audit row (MCP-19 flips this to one denied row)', async () => {
+	it('a plan-mode denial writes one denied audit row', async () => {
 		const client = await session()
 		await client.callTool('session_set_mode', { mode: 'plan' })
 		const before = (await auditRows('hooks_register')).length
@@ -186,6 +222,8 @@ describe('MCP contract: defineTool guardrails', () => {
 			await client.callTool('hooks_register', { event: 'tool:before', trust_level: 'allow' }),
 		)
 		expect(blocked.error).toBe('plan_mode_restricted')
-		expect(await auditRows('hooks_register')).toHaveLength(before)
+		const rows = await auditRows('hooks_register')
+		expect(rows).toHaveLength(before + 1)
+		expect(rows.at(-1)).toMatchObject({ tool: 'hooks_register', outcome: 'denied' })
 	})
 })
