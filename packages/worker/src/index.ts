@@ -226,25 +226,9 @@ const defaultHandler = {
 			const auth = request.headers.get('authorization') ?? ''
 			if (!env.FERMI_BEARER_TOKEN || auth !== `Bearer ${env.FERMI_BEARER_TOKEN}`)
 				return new Response('Unauthorized', { status: 401 })
-			const b = (await request.json().catch(() => ({}))) as { ref?: string }
-			if (!b.ref || !/^[0-9a-f]{7,40}$/.test(b.ref))
-				return Response.json({ ok: false, error: 'ref must be a commit sha' }, { status: 400 })
-			const { runnerUrl } = await import('./lib/runner-pin.ts')
-			const res = await fetch(runnerUrl(b.ref))
-			if (!res.ok)
-				return Response.json({ ok: false, error: `fetch_${res.status}` }, { status: 502 })
-			const bytes = await res.arrayBuffer()
-			const digest = await crypto.subtle.digest('SHA-256', bytes)
-			const sha256 = [...new Uint8Array(digest)]
-				.map((x) => x.toString(16).padStart(2, '0'))
-				.join('')
-			const raw = await env.FERMI_KV.get('fleet:config')
-			const config = raw ? JSON.parse(raw) : {}
-			await env.FERMI_KV.put(
-				'fleet:config',
-				JSON.stringify({ ...config, runner_ref: b.ref, runner_sha256: sha256 }),
-			)
-			return Response.json({ ok: true, ref: b.ref, sha256, bytes: bytes.byteLength })
+			const { pinRunner } = await import('./lib/fleet-config.ts')
+			const out = await pinRunner(env, await request.json().catch(() => ({})))
+			return Response.json(out.body, { status: out.status })
 		}
 		// Operator edits to fleet:config without Cloudflare KV access (#43). The
 		// runner pin stays on its own fetch+hash endpoint above.
