@@ -1,0 +1,4067 @@
+[
+	{
+		"name": "allowlist_add",
+		"descriptionSha256": "95c3376acfd6d8301c929e3c8a93bb2d14a69d603444063f35c62774e2654be6",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"channel": {
+					"type": "string",
+					"enum": [
+						"tg",
+						"wa",
+						"dc",
+						"sl"
+					],
+					"description": "Channel the sender belongs to"
+				},
+				"sender_id": {
+					"type": "string",
+					"description": "Channel-specific sender id"
+				},
+				"note": {
+					"type": "string",
+					"description": "Optional label, e.g. \"guest\" or a name"
+				}
+			},
+			"required": [
+				"channel",
+				"sender_id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "allowlist_list",
+		"descriptionSha256": "b60d1ba29d498848917f96130ec4df16e20ca5da4f14f8b344e5bfd0b5f88e73",
+		"inputSchema": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {}
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "allowlist_remove",
+		"descriptionSha256": "7cd0f03c18120c8e86ca55640b97a7bf11f90d3bcd48687ffaeb89fe2d9985d1",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"channel": {
+					"type": "string",
+					"enum": [
+						"tg",
+						"wa",
+						"dc",
+						"sl"
+					],
+					"description": "Channel the sender belongs to"
+				},
+				"sender_id": {
+					"type": "string",
+					"description": "Channel-specific sender id"
+				}
+			},
+			"required": [
+				"channel",
+				"sender_id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "box_heartbeat",
+		"descriptionSha256": "35dc2fab5d8c8310d15729808af27efe0565e988ce80250479ac0017c309252a",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"box_id": {
+					"type": "string",
+					"description": "Box id from the registry"
+				}
+			},
+			"required": [
+				"box_id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "box_list",
+		"descriptionSha256": "75c3dac02becebf904117297b6ee8e60e735935c614f7855894340da4bf634ba",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"status": {
+					"type": "string",
+					"enum": [
+						"provisioning",
+						"online",
+						"offline",
+						"destroyed"
+					]
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 200,
+					"default": 50
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "browser_action",
+		"descriptionSha256": "f668211e47a9ca46c9500114646898bc181ace2c78360d43d1aefa9093670df2",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"actions": {
+					"type": "array",
+					"items": {
+						"anyOf": [
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "goto"
+									},
+									"url": {
+										"type": "string",
+										"format": "uri"
+									}
+								},
+								"required": [
+									"type",
+									"url"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "type"
+									},
+									"selector": {
+										"type": "string"
+									},
+									"text": {
+										"type": "string"
+									},
+									"delay": {
+										"type": "number"
+									}
+								},
+								"required": [
+									"type",
+									"selector",
+									"text"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "click"
+									},
+									"selector": {
+										"type": "string"
+									}
+								},
+								"required": [
+									"type",
+									"selector"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "waitFor"
+									},
+									"selector": {
+										"type": "string"
+									},
+									"timeout": {
+										"type": "number",
+										"default": 5000
+									}
+								},
+								"required": [
+									"type",
+									"selector"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "screenshot"
+									}
+								},
+								"required": [
+									"type"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "extract"
+									},
+									"selector": {
+										"type": "string",
+										"default": "body"
+									}
+								},
+								"required": [
+									"type"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "evaluate"
+									},
+									"script": {
+										"type": "string"
+									}
+								},
+								"required": [
+									"type",
+									"script"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "getCookies"
+									}
+								},
+								"required": [
+									"type"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "setCookies"
+									},
+									"cookies": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"additionalProperties": {}
+										}
+									}
+								},
+								"required": [
+									"type",
+									"cookies"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "select"
+									},
+									"selector": {
+										"type": "string"
+									},
+									"value": {
+										"type": "string"
+									}
+								},
+								"required": [
+									"type",
+									"selector",
+									"value"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "hover"
+									},
+									"selector": {
+										"type": "string"
+									}
+								},
+								"required": [
+									"type",
+									"selector"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "scrollTo"
+									},
+									"selector": {
+										"type": "string"
+									},
+									"x": {
+										"type": "number"
+									},
+									"y": {
+										"type": "number"
+									}
+								},
+								"required": [
+									"type"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "wait"
+									},
+									"ms": {
+										"type": "number",
+										"minimum": 0,
+										"maximum": 30000
+									}
+								},
+								"required": [
+									"type",
+									"ms"
+								],
+								"additionalProperties": false
+							}
+						]
+					},
+					"minItems": 1,
+					"maxItems": 50,
+					"description": "Ordered list of browser actions to execute sequentially"
+				},
+				"viewport": {
+					"type": "object",
+					"properties": {
+						"width": {
+							"type": "number",
+							"default": 1280,
+							"description": "Viewport width in pixels"
+						},
+						"height": {
+							"type": "number",
+							"default": 720,
+							"description": "Viewport height in pixels"
+						}
+					},
+					"additionalProperties": false,
+					"description": "Optional viewport size override"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"actions"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "browser_extract",
+		"descriptionSha256": "ffd08bf62a5625f26daf9c87db807068787bd9537d5e74193d253969e8a93330",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"url": {
+					"type": "string",
+					"format": "uri",
+					"description": "The URL to extract content from"
+				},
+				"selector": {
+					"type": "string",
+					"description": "Optional CSS selector to extract specific content"
+				}
+			},
+			"required": [
+				"url"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "browser_navigate",
+		"descriptionSha256": "895fce24251f1d27948affc7dab79889189e0e1eaff1ead6180ccf3594366ff6",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"url": {
+					"type": "string",
+					"format": "uri",
+					"description": "The URL to navigate to"
+				}
+			},
+			"required": [
+				"url"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "browser_screenshot",
+		"descriptionSha256": "d1b5436f1f5ff4fe371dcdaf8b3ec8ab5f81ce7d6f41eb76f3f76a525aa3d3c7",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"url": {
+					"type": "string",
+					"format": "uri",
+					"description": "The URL to screenshot"
+				}
+			},
+			"required": [
+				"url"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "browser_session_action",
+		"descriptionSha256": "2528aef651b86a7f466e660e4db0c2fcf8fae8fcdf07ab74f8565d718b350de3",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"session_id": {
+					"type": "string",
+					"format": "uuid",
+					"description": "Session ID returned by browser_session_launch"
+				},
+				"actions": {
+					"type": "array",
+					"items": {
+						"anyOf": [
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "goto"
+									},
+									"url": {
+										"type": "string",
+										"format": "uri"
+									}
+								},
+								"required": [
+									"type",
+									"url"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "type"
+									},
+									"selector": {
+										"type": "string"
+									},
+									"text": {
+										"type": "string"
+									},
+									"delay": {
+										"type": "number"
+									}
+								},
+								"required": [
+									"type",
+									"selector",
+									"text"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "click"
+									},
+									"selector": {
+										"type": "string"
+									}
+								},
+								"required": [
+									"type",
+									"selector"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "waitFor"
+									},
+									"selector": {
+										"type": "string"
+									},
+									"timeout": {
+										"type": "number",
+										"default": 5000
+									}
+								},
+								"required": [
+									"type",
+									"selector"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "screenshot"
+									}
+								},
+								"required": [
+									"type"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "extract"
+									},
+									"selector": {
+										"type": "string",
+										"default": "body"
+									}
+								},
+								"required": [
+									"type"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "evaluate"
+									},
+									"script": {
+										"type": "string"
+									}
+								},
+								"required": [
+									"type",
+									"script"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "getCookies"
+									}
+								},
+								"required": [
+									"type"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "setCookies"
+									},
+									"cookies": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"additionalProperties": {}
+										}
+									}
+								},
+								"required": [
+									"type",
+									"cookies"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "select"
+									},
+									"selector": {
+										"type": "string"
+									},
+									"value": {
+										"type": "string"
+									}
+								},
+								"required": [
+									"type",
+									"selector",
+									"value"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "hover"
+									},
+									"selector": {
+										"type": "string"
+									}
+								},
+								"required": [
+									"type",
+									"selector"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "scrollTo"
+									},
+									"selector": {
+										"type": "string"
+									},
+									"x": {
+										"type": "number"
+									},
+									"y": {
+										"type": "number"
+									}
+								},
+								"required": [
+									"type"
+								],
+								"additionalProperties": false
+							},
+							{
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"const": "wait"
+									},
+									"ms": {
+										"type": "number",
+										"minimum": 0,
+										"maximum": 30000
+									}
+								},
+								"required": [
+									"type",
+									"ms"
+								],
+								"additionalProperties": false
+							}
+						]
+					},
+					"minItems": 1,
+					"maxItems": 50,
+					"description": "Ordered list of browser actions to execute sequentially"
+				},
+				"viewport": {
+					"type": "object",
+					"properties": {
+						"width": {
+							"type": "number",
+							"default": 1280
+						},
+						"height": {
+							"type": "number",
+							"default": 720
+						}
+					},
+					"additionalProperties": false,
+					"description": "Optional viewport override"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"session_id",
+				"actions"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "browser_session_close",
+		"descriptionSha256": "d3bbde467ab27051ced0cffe53afecad5e9930edd88a4968112d208c707c3ed4",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"session_id": {
+					"type": "string",
+					"format": "uuid",
+					"description": "Session ID returned by browser_session_launch"
+				}
+			},
+			"required": [
+				"session_id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "browser_session_launch",
+		"descriptionSha256": "f83cd722f6ece135627dd289753bed5ef6f58bb25293205d8a859d3f482862f8",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"label": {
+					"type": "string",
+					"description": "Human-readable label for this session"
+				},
+				"keep_alive_ms": {
+					"type": "number",
+					"minimum": 10000,
+					"maximum": 600000,
+					"default": 120000,
+					"description": "How long (ms) to keep the browser alive between actions (default 120s)"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "browser_session_list",
+		"descriptionSha256": "5e3aa67bf2df45332407bf29b3dc90f85469d3417d02b8c9cacb9c52a995df49",
+		"inputSchema": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {}
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "browser_session_request_human",
+		"descriptionSha256": "9e45ed9c6a08ee9cc75669b66ac320c1c38734cf0a2885c016018b0e8614e48b",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"session_id": {
+					"type": "string",
+					"format": "uuid",
+					"description": "Session ID returned by browser_session_launch"
+				},
+				"message": {
+					"type": "string",
+					"description": "Instructions for the human, e.g. \"Please log into Shopify and click Confirm\""
+				}
+			},
+			"required": [
+				"session_id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "browser_session_resume",
+		"descriptionSha256": "83ad4984d36048c589b0d28fb1cf0969a97db2aadd53c75a0bb6a7f56ae37751",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"session_id": {
+					"type": "string",
+					"format": "uuid",
+					"description": "Session ID returned by browser_session_launch"
+				}
+			},
+			"required": [
+				"session_id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "canvas_update",
+		"descriptionSha256": "b696c60c6865eca7d3c14205269f68f3b3235474ff8ee2fa0c582d2f0282e27a",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"canvas_id": {
+					"type": "string",
+					"description": "The canvas ID to update"
+				},
+				"patch": {
+					"type": "object",
+					"additionalProperties": {},
+					"description": "JSON object to merge into the canvas state"
+				}
+			},
+			"required": [
+				"canvas_id",
+				"patch"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "channel_pair_approve",
+		"descriptionSha256": "160b36055caa7def2a003bd99212f5b589c0bc9237b3615dea3493eff6a55f48",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"code": {
+					"type": "string",
+					"description": "The pairing code the sender received"
+				}
+			},
+			"required": [
+				"code"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "channel_read",
+		"descriptionSha256": "9bc25132eebc872f4639757e86c9cd232b96227a02e2102a273cf52291846bea",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"channel": {
+					"type": "string",
+					"enum": [
+						"dc"
+					],
+					"description": "Only Discord supports reading channel history"
+				},
+				"channel_id": {
+					"type": "string",
+					"description": "Discord channel id to read"
+				},
+				"guild_id": {
+					"type": "string",
+					"description": "Server id — with channel_name, resolves the channel by name"
+				},
+				"channel_name": {
+					"type": "string",
+					"description": "Channel name (e.g. \"announcements\") — requires guild_id"
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 50,
+					"default": 20,
+					"description": "How many recent messages"
+				},
+				"query": {
+					"type": "string",
+					"description": "Only return messages containing this text"
+				}
+			},
+			"required": [
+				"channel"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "channel_send",
+		"descriptionSha256": "cfba344499f3d84075e23c55429ada9f8aeef55fe6829057ded23b9f61eff7ee",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"channel": {
+					"type": "string",
+					"enum": [
+						"tg",
+						"wa",
+						"dc",
+						"sl"
+					],
+					"description": "Channel to send through"
+				},
+				"chat_id": {
+					"type": "string",
+					"description": "Channel-specific chat id (from the task row)"
+				},
+				"text": {
+					"type": "string",
+					"description": "Message text to send"
+				}
+			},
+			"required": [
+				"channel",
+				"chat_id",
+				"text"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "cloud_agent_destroy",
+		"descriptionSha256": "3b29405d05725cbe2db1b1be88d61480f352e6bdeffe59be72e8dc52e69f4ee2",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Cloud agent id"
+				},
+				"reason": {
+					"type": "string",
+					"description": "Why the agent is being destroyed"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "cloud_agent_followup",
+		"descriptionSha256": "220408f64962547bde2c1ec86a0187094d5542647f95797849c2f9b96e534645",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Cloud agent id"
+				},
+				"message": {
+					"type": "string",
+					"minLength": 1,
+					"description": "Message to deliver to the agent"
+				},
+				"interrupt": {
+					"type": "boolean",
+					"default": false,
+					"description": "Abort the current turn before delivering the message"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"id",
+				"message"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "cloud_agent_get",
+		"descriptionSha256": "bcf3a6829ffa8578c9c6deb03a7f4281a2f7b4d28b838ffcbcc7d63f800ae38c",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Cloud agent id"
+				}
+			},
+			"required": [
+				"id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "cloud_agent_launch",
+		"descriptionSha256": "08ed716bf584368af82b655e1d7f98e1ac6d6e46c9ed176554e55e0f2a87b18a",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"prompt": {
+					"type": "string",
+					"minLength": 10,
+					"description": "Full task prompt for the agent"
+				},
+				"proof_contract": {
+					"type": "string",
+					"minLength": 10,
+					"description": "JSON contract checked mechanically: {\"kind\":\"artifact\",\"name\",...} | {\"kind\":\"http\",\"url\",...} | {\"kind\":\"test\",\"cmd\",...} | {\"kind\":\"dom\",\"url\",\"selector\",...}. Free text is rejected."
+				},
+				"route": {
+					"type": "string",
+					"enum": [
+						"claude",
+						"codex",
+						"grok"
+					],
+					"default": "claude",
+					"description": "Inference route for the agent harness"
+				},
+				"model": {
+					"type": "string",
+					"description": "Override the route model id (e.g. gpt-6-astra)"
+				},
+				"account": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_]{0,31}$",
+					"description": "Alternate Claude account for the claude route (e.g. kayo → secret CLAUDE_CODE_OAUTH_TOKEN_KAYO). Omit for the default account. Check routes in fleet status to pick one that is not capped."
+				},
+				"box_id": {
+					"type": "string",
+					"description": "Target an existing box (e.g. a private worker) instead of provisioning"
+				},
+				"budget_usd": {
+					"type": "number",
+					"exclusiveMinimum": 0,
+					"description": "Hard spend ceiling"
+				},
+				"ttl_seconds": {
+					"type": "integer",
+					"exclusiveMinimum": 0,
+					"description": "Hard wall-clock ceiling"
+				},
+				"skills": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Fermi skill slugs the agent should load"
+				},
+				"sessions": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Web session names to lease at boot (see web_session_capture)"
+				},
+				"repo": {
+					"type": "string",
+					"description": "Repository to clone (owner/name or URL)"
+				},
+				"branch": {
+					"type": "string",
+					"description": "Base branch; agent works on its own branch"
+				},
+				"parent_task_id": {
+					"type": "string",
+					"description": "Parent task id when this launch is part of a fan-out"
+				},
+				"instance_type": {
+					"type": "string",
+					"description": "EC2 size for this launch (must be in fleet:config.allowed_instance_types, e.g. t3.medium for Node/TypeScript builds that need 4 GiB). Defaults to the fleet instance_type."
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"prompt",
+				"proof_contract"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "cloud_agent_list",
+		"descriptionSha256": "03fdc18e5219574a7b91b136994c449b79f51bebc879d3a77019624b4c03cf53",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"status": {
+					"type": "string",
+					"enum": [
+						"launching",
+						"running",
+						"waiting_human",
+						"done",
+						"failed",
+						"destroyed"
+					]
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 20
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "cloud_agent_stop",
+		"descriptionSha256": "4e19ad71827cd49d947ce7a340f3404784c6088c4460eeedba4af2b1c2e3a0de",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Cloud agent id"
+				}
+			},
+			"required": [
+				"id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "cloud_env_list",
+		"descriptionSha256": "9516f83fbe84a708a2851f61076b3502d7f0f53f402d72c6c30b8992367f7908",
+		"inputSchema": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {}
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "cloud_env_snapshot",
+		"descriptionSha256": "062fea4c74f09e988156c67c19e689d8cb24267f7f78113b4b09820e963f079f",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"description": "Snapshot name, e.g. node-playwright"
+				},
+				"image_ref": {
+					"type": "string",
+					"minLength": 1,
+					"description": "AMI id / container image ref"
+				},
+				"description": {
+					"type": "string",
+					"description": "What is baked into this environment"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"name",
+				"image_ref"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "connector_delete",
+		"descriptionSha256": "4f25deae32cfcf6194b9664175bae054e888cf9cce5439a2eea7ac045fe864f5",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1
+				}
+			},
+			"required": [
+				"name"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "connector_get",
+		"descriptionSha256": "314acfe96d54710922cd354cd18fb3936cf4d4a00b1cab277cf2f33db0d180f6",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1
+				}
+			},
+			"required": [
+				"name"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "connector_list",
+		"descriptionSha256": "166d4ba08a15e64578f2c0455557a98cebc93bfed1cdedee71425d9786940df7",
+		"inputSchema": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {}
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "connector_set",
+		"descriptionSha256": "2c70bbd14548a323fb5fb08e2f15b1f386afae6f4de0fe340282f43958d3c9cc",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 64
+				},
+				"capability": {
+					"type": "string",
+					"minLength": 1,
+					"description": "Capability that handles this connector's calls"
+				},
+				"secret_name": {
+					"type": "string"
+				},
+				"base_url": {
+					"type": "string",
+					"format": "uri"
+				},
+				"description": {
+					"type": "string"
+				},
+				"default_headers": {
+					"type": "object",
+					"additionalProperties": {
+						"type": "string"
+					}
+				}
+			},
+			"required": [
+				"name",
+				"capability",
+				"base_url"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "context_bootstrap",
+		"descriptionSha256": "6888b456c20b71d65f38fe5249d49a19ee4605752a3c8f90433f5c002eef86b3",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"channel": {
+					"type": "string",
+					"enum": [
+						"tg",
+						"wa",
+						"dc",
+						"sl"
+					],
+					"description": "Channel of the chat"
+				},
+				"chat_id": {
+					"type": "string",
+					"description": "Channel-specific chat id (from the task row)"
+				}
+			},
+			"required": [
+				"channel",
+				"chat_id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "conversation_history",
+		"descriptionSha256": "61a3c4497538f7ab1e547b608fe767b76754e17cfacf3d42e23c9d01cc6a1826",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"channel": {
+					"type": "string",
+					"enum": [
+						"tg",
+						"wa",
+						"dc",
+						"sl"
+					],
+					"description": "Channel of the chat"
+				},
+				"chat_id": {
+					"type": "string",
+					"description": "Channel-specific chat id"
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 50,
+					"default": 20,
+					"description": "Turns to return"
+				}
+			},
+			"required": [
+				"channel",
+				"chat_id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "execute",
+		"descriptionSha256": "537214a425da417423eca79b9e0778326b3a99a15640614ac1f20b116ea63a4d",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"code": {
+					"type": "string",
+					"description": "JavaScript source. Default export an async function or use a top-level await expression. Must `return` a result."
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"code"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "fs_list",
+		"descriptionSha256": "1feeb5303c06d9ede6fa5ef17441fabb81ad7c175c3552bbe1e92fd51064fa0c",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"prefix": {
+					"type": "string",
+					"default": "",
+					"description": "R2 key prefix to filter by"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "fs_read",
+		"descriptionSha256": "1a7938409d2a10a3dc4fb3db5738ae7fab5da5b532cb9e6535bef584400db4bd",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"path": {
+					"type": "string",
+					"description": "The R2 object key to read"
+				}
+			},
+			"required": [
+				"path"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "fs_write",
+		"descriptionSha256": "fe1a50d8cee652e020aa25f51066f4ebfc5257902a4e10d714dc64c407ded762",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"path": {
+					"type": "string",
+					"description": "The R2 object key to write"
+				},
+				"body": {
+					"type": "string",
+					"description": "The content to write"
+				}
+			},
+			"required": [
+				"path",
+				"body"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "hooks_list",
+		"descriptionSha256": "feae7f6eb6e098cbe6035fdb1f910dc8290893f85ae0149a78d8a88f3a7d83c5",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"event": {
+					"type": "string",
+					"description": "Filter by event name"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "hooks_register",
+		"descriptionSha256": "7c4497ecfda7fbb565a03e9c0ff1a51997f1a7dd6b97e0b82d2e21df670164fe",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"event": {
+					"type": "string",
+					"enum": [
+						"tool:before",
+						"tool:after",
+						"session:start",
+						"session:end",
+						"plan:approve",
+						"plan:step",
+						"memory:write",
+						"memory:decay",
+						"skill:loaded",
+						"team:spawn",
+						"team:report"
+					]
+				},
+				"matcher": {
+					"type": "string",
+					"description": "Glob pattern to match tool names (e.g. \"memory_*\")"
+				},
+				"command": {
+					"type": "string",
+					"description": "Command or note associated with the hook"
+				},
+				"scope": {
+					"type": "string",
+					"enum": [
+						"user",
+						"project",
+						"session"
+					],
+					"default": "session"
+				},
+				"trust_level": {
+					"type": "string",
+					"enum": [
+						"allow",
+						"ask",
+						"deny"
+					],
+					"default": "allow"
+				},
+				"is_async": {
+					"type": "boolean",
+					"default": false
+				},
+				"once": {
+					"type": "boolean",
+					"default": false
+				}
+			},
+			"required": [
+				"event"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "hooks_test",
+		"descriptionSha256": "3dd29d28918074dac3d81f8bdfa03634f501a3db5d5daabf3c6bee72fab1bd0a",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"event": {
+					"type": "string"
+				},
+				"tool_name": {
+					"type": "string"
+				}
+			},
+			"required": [
+				"event"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "mac_app_activate",
+		"descriptionSha256": "48138492b0454cd1de87dc29b6080f327d9af18c2bc6bee27c82eba6d15b396a",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"description": "Application name"
+				}
+			},
+			"required": [
+				"name"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "mac_app_list",
+		"descriptionSha256": "c58caaa034720372f5bfe4a455e85d162a67a3fc2fd18eeb9e27a4ce16e1cc02",
+		"inputSchema": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {}
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "mac_applescript",
+		"descriptionSha256": "c6f921dfb3fbda19500e074e1cf04dedd6ecc890344c09936c75aa94c6a19743",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"script": {
+					"type": "string",
+					"description": "AppleScript source code"
+				},
+				"timeout_ms": {
+					"type": "number",
+					"description": "Timeout in ms"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"script"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_browser_action",
+		"descriptionSha256": "7876642c6be15ddf5123390bb49675605ee3f4dc1941d5810b32db6501da4ae4",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"session_id": {
+					"type": "string",
+					"description": "Browser session ID from mac_browser_launch"
+				},
+				"actions": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"additionalProperties": {}
+					},
+					"minItems": 1,
+					"description": "Array of actions to execute sequentially"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"session_id",
+				"actions"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_browser_close",
+		"descriptionSha256": "5a1e09a4ace7b0cac99c05b7e2541a9dd0a9c825e785e58f58821df6b382d6a4",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"session_id": {
+					"type": "string",
+					"description": "Browser session ID to close"
+				}
+			},
+			"required": [
+				"session_id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_browser_launch",
+		"descriptionSha256": "32ad052d37def43f064186277c4b4ad28400f3a9c598919a72b7838f7b576ab9",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"label": {
+					"type": "string",
+					"description": "Session label for cookie persistence"
+				},
+				"headless": {
+					"type": "boolean",
+					"description": "Headless mode (default: false for stealth)"
+				},
+				"proxy": {
+					"type": "string",
+					"description": "Proxy URL"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_browser_list",
+		"descriptionSha256": "58cbe1a103a654e9c8d0ea4dbf973c375c22c6431f6b427ffaca1f6f35de6df0",
+		"inputSchema": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {}
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "mac_chrome_open",
+		"descriptionSha256": "59b1e7b31b9e40a8cf89dafb9362d5178475df2319ea0c104a9ff835848e67b3",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"label": {
+					"type": "string",
+					"description": "Profile label (same namespace as mac_browser_launch)"
+				},
+				"url": {
+					"type": "string",
+					"description": "URL to open"
+				}
+			},
+			"required": [
+				"label",
+				"url"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_click",
+		"descriptionSha256": "b8c41fc904fc905f2465a9b9e3023d61a4dca849da9695ccf0dc915fbcfe8eab",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"x": {
+					"type": "number",
+					"description": "X coordinate"
+				},
+				"y": {
+					"type": "number",
+					"description": "Y coordinate"
+				},
+				"button": {
+					"type": "string",
+					"enum": [
+						"left",
+						"right",
+						"middle"
+					],
+					"description": "Mouse button"
+				},
+				"double": {
+					"type": "boolean",
+					"description": "Double click"
+				},
+				"human": {
+					"type": "boolean",
+					"description": "Glide the pointer with easing before clicking"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"x",
+				"y"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_clipboard_get",
+		"descriptionSha256": "5536c2bf2ac735f837aa7b1aaefc533bc12039d64a658451f5d33d1ed3f440ff",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"format": {
+					"type": "string",
+					"enum": [
+						"text",
+						"image"
+					],
+					"description": "Format (default: text)"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "mac_clipboard_set",
+		"descriptionSha256": "ecbb9d3f046b89fed445ffb008dce99ba0ead43d7f6b27a2ac37ac5ace37b8f9",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"text": {
+					"type": "string",
+					"description": "Text to copy to clipboard"
+				}
+			},
+			"required": [
+				"text"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_file_delete",
+		"descriptionSha256": "c8487d917c196ce595931a4b4b14f2a8db99a4c894f9fe42520555fd06c55f81",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"path": {
+					"type": "string",
+					"description": "Absolute path to delete"
+				}
+			},
+			"required": [
+				"path"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_file_info",
+		"descriptionSha256": "162868fab977b72e247fef593978e9e6dd3b8cfeb7057b6dfce9159f8d440d3d",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"path": {
+					"type": "string",
+					"description": "Absolute path"
+				}
+			},
+			"required": [
+				"path"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "mac_file_list",
+		"descriptionSha256": "ba78a9d492d05271081a5080ee34038ea51db3d66b71b633863d190e52bc9523",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"path": {
+					"type": "string",
+					"description": "Absolute path to directory"
+				},
+				"recursive": {
+					"type": "boolean",
+					"description": "List recursively"
+				}
+			},
+			"required": [
+				"path"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "mac_file_move",
+		"descriptionSha256": "e5184026b2d7ebbe7ffed61d3a13cbbd1a2c95dfcb45d3e5f23c0a91b8007cbb",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"source": {
+					"type": "string",
+					"description": "Source path"
+				},
+				"destination": {
+					"type": "string",
+					"description": "Destination path"
+				}
+			},
+			"required": [
+				"source",
+				"destination"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_file_read",
+		"descriptionSha256": "97780206a3cc1b7103128d0bce8246daee594da88ac33748d598c0c8b7f2fb64",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"path": {
+					"type": "string",
+					"description": "Absolute path to the file"
+				},
+				"encoding": {
+					"type": "string",
+					"enum": [
+						"utf8",
+						"base64"
+					],
+					"description": "Encoding (default: utf8)"
+				}
+			},
+			"required": [
+				"path"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "mac_file_search",
+		"descriptionSha256": "497fed876e98ff6a073c2e2f1063130a982cc8e72ecb5948186419c9ac1a73b0",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"query": {
+					"type": "string",
+					"description": "Search query"
+				},
+				"path": {
+					"type": "string",
+					"description": "Limit search to this directory"
+				}
+			},
+			"required": [
+				"query"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "mac_file_write",
+		"descriptionSha256": "e55e6942d1f09542f533fdd36400a8d7370c4f13cdba7a6ced244f2c7fe51f67",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"path": {
+					"type": "string",
+					"description": "Absolute path"
+				},
+				"content": {
+					"type": "string",
+					"description": "Content to write"
+				},
+				"append": {
+					"type": "boolean",
+					"description": "Append instead of overwrite"
+				}
+			},
+			"required": [
+				"path",
+				"content"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_jxa",
+		"descriptionSha256": "e87151b932b59df2497fe681d9790e611599297bd6123749083483f442a39d85",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"script": {
+					"type": "string",
+					"description": "JavaScript for Automation source code"
+				},
+				"timeout_ms": {
+					"type": "number",
+					"description": "Timeout in ms"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"script"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_keystroke",
+		"descriptionSha256": "610018ec1d5cddb11c96ef8a5abbc56fb74e9852553206ecbb0018ad8db66db7",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"keys": {
+					"type": "string",
+					"description": "Text to type, or a named key (return, tab, escape, space, delete, up, down, ...)"
+				},
+				"modifiers": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Modifier keys"
+				},
+				"app": {
+					"type": "string",
+					"description": "Target application"
+				},
+				"human": {
+					"type": "boolean",
+					"description": "Type with randomized human-like delays"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"keys"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_notification",
+		"descriptionSha256": "42188ffcae938ddacfc1cf08da3f45add29b4284d098608b96b5d4cc5354559c",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"title": {
+					"type": "string",
+					"description": "Notification title"
+				},
+				"message": {
+					"type": "string",
+					"description": "Notification message"
+				},
+				"sound": {
+					"type": "boolean",
+					"description": "Play sound"
+				}
+			},
+			"required": [
+				"title",
+				"message"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "mac_open",
+		"descriptionSha256": "438ee7a86c89fe707bc31bc20126a97cf3d2274f11edd88d7192b92c09be1d28",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"target": {
+					"type": "string",
+					"description": "File path, URL, or app name"
+				},
+				"app": {
+					"type": "string",
+					"description": "App to open with"
+				}
+			},
+			"required": [
+				"target"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_screen_ocr",
+		"descriptionSha256": "fee9b4d5a2d875ef900b5e0bfe80f0b582e23f447dc2e172c0eec0ce5a821119",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"region": {
+					"type": "string",
+					"description": "Region as \"x,y,width,height\""
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "mac_screenshot",
+		"descriptionSha256": "59929e842b43b1513378001daa2bad6f4f63863a7e87826d1d56c48618ff8101",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"region": {
+					"type": "string",
+					"description": "Region as \"x,y,width,height\""
+				},
+				"app": {
+					"type": "string",
+					"description": "App name to capture its window"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "mac_shell",
+		"descriptionSha256": "5cbb422a76859bee8abda41190e0cee00b8eb8b8bb0201f663c8bde9c61a3c4d",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"command": {
+					"type": "string",
+					"description": "The shell command to execute"
+				},
+				"cwd": {
+					"type": "string",
+					"description": "Working directory"
+				},
+				"timeout_ms": {
+					"type": "number",
+					"description": "Timeout in ms (default: 30000)"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"command"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "mac_system_info",
+		"descriptionSha256": "a6676120090bdc8e6777a2a3ab720910987f4b88efac6e27e98cded414b47884",
+		"inputSchema": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {}
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "memory_delete",
+		"descriptionSha256": "93c1e0d725df41936362243df15e1bbf7e022d5872ed8cd756b7b1345ae7ff03",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "number",
+					"description": "The memory ID to soft-delete"
+				}
+			},
+			"required": [
+				"id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "memory_list_recent",
+		"descriptionSha256": "f37201a4e34dfdebe38989c961002c6a3c721c5491bb14d0197a9078d2d6d273",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"limit": {
+					"type": "number",
+					"default": 10,
+					"description": "Maximum number of memories to return (1-100)"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "memory_recall",
+		"descriptionSha256": "95891a8d1cb225ce105dafe3b9259672795e2180029c560dfc4ed43bef93f44b",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"query": {
+					"type": "string",
+					"description": "Search term to match against memory body"
+				},
+				"limit": {
+					"type": "number",
+					"default": 10,
+					"description": "Maximum number of results to return"
+				},
+				"sort_by": {
+					"type": "string",
+					"enum": [
+						"relevance",
+						"created_at"
+					],
+					"default": "relevance",
+					"description": "Result ordering: 'relevance' (pinned-first then newest) or 'created_at' (pure recency)"
+				}
+			},
+			"required": [
+				"query"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "memory_update",
+		"descriptionSha256": "dd6b6c4e6edd27a44f91cca2e3c551b6f3313f79245ff411c745146d5e4a0fca",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "number",
+					"description": "The memory ID to update"
+				},
+				"patch": {
+					"type": "object",
+					"properties": {
+						"kind": {
+							"type": "string",
+							"enum": [
+								"fact",
+								"preference",
+								"event"
+							]
+						},
+						"body": {
+							"type": "string"
+						},
+						"pinned": {
+							"type": "boolean"
+						}
+					},
+					"additionalProperties": false,
+					"description": "Fields to update"
+				}
+			},
+			"required": [
+				"id",
+				"patch"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "memory_write",
+		"descriptionSha256": "c3be153fd05ef63a841cc67db60889e2edb1d4c60a93fa6392c05102df3f3d52",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"kind": {
+					"type": "string",
+					"enum": [
+						"fact",
+						"preference",
+						"event"
+					],
+					"description": "Category of memory"
+				},
+				"body": {
+					"type": "string",
+					"description": "The memory content"
+				},
+				"pinned": {
+					"type": "boolean",
+					"default": false,
+					"description": "Pin this memory to prevent automatic decay"
+				}
+			},
+			"required": [
+				"kind",
+				"body"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "meta_list_capabilities",
+		"descriptionSha256": "8975e97c8f04d33db5913017359f1f85ddfc16ddbca812fb95d0171adecb1da5",
+		"inputSchema": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {}
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": true
+	},
+	{
+		"name": "oauth_authorize_url",
+		"descriptionSha256": "82231ab3a9c3990ae9f457046351dd118a4aaf3571afe5334ff62759f2a17d4c",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1
+				}
+			},
+			"required": [
+				"name"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "oauth_delete_client",
+		"descriptionSha256": "818ca7a624489e275959798f6ffa28aa3fb8c673f19767eaebaf396fa52bdabd",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"name"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "oauth_get_client",
+		"descriptionSha256": "928b8dbd96e8698c25a8972c86972815e0e3c1d6d2c28262d47d328c20ac6b91",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1
+				}
+			},
+			"required": [
+				"name"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "oauth_list_clients",
+		"descriptionSha256": "2a42a910e47c00c83e69f5524b0757901263179f04e5c7f680cc82fa05535d34",
+		"inputSchema": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {}
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "oauth_register_client",
+		"descriptionSha256": "455c5a4b0cbc688d260fff64a84aa49d0d102bd070ef73e37da942ac881fcdd0",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 64
+				},
+				"client_id": {
+					"type": "string",
+					"minLength": 1
+				},
+				"client_secret_name": {
+					"type": "string",
+					"minLength": 1,
+					"description": "Name of the secret holding the client_secret value"
+				},
+				"auth_url": {
+					"type": "string",
+					"format": "uri"
+				},
+				"token_url": {
+					"type": "string",
+					"format": "uri"
+				},
+				"scopes": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"redirect_path": {
+					"type": "string"
+				},
+				"result_secret_name": {
+					"type": "string",
+					"minLength": 1,
+					"description": "Where to store the resulting access_token"
+				},
+				"result_allowed_hosts": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Hosts the access_token may be sent to"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"name",
+				"client_id",
+				"client_secret_name",
+				"auth_url",
+				"token_url",
+				"result_secret_name"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "open_generated_ui",
+		"descriptionSha256": "a7824792a464098c25bd5dd5ba0a4bd86358a0344a7c7faa1f79b3aa4cea61f7",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"title": {
+					"type": "string",
+					"description": "Optional title for the canvas"
+				},
+				"initial_state": {
+					"type": "object",
+					"additionalProperties": {},
+					"description": "Optional initial state to populate the canvas with"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "package_delete",
+		"descriptionSha256": "54aa66685b86dc8134799661881f27ffe166270f200301ae7c5888c919152863",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"slug": {
+					"type": "string",
+					"minLength": 1
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"slug"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "package_get",
+		"descriptionSha256": "0a69dc230d6fd1703dec34d7bc2fa3a54fa13eb8959088d437a50a4344aae7f4",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"slug": {
+					"type": "string",
+					"minLength": 1
+				}
+			},
+			"required": [
+				"slug"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "package_list",
+		"descriptionSha256": "c64afbf7b0a0a2a1f3b8a465127e107dedc5bd8fda4797152f3b9e6d80e161e9",
+		"inputSchema": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {}
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "package_set",
+		"descriptionSha256": "7f954d556960e65a714549ac854ed956e9399d4430b53a16442ec885aaa8fdce",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"slug": {
+					"type": "string",
+					"minLength": 1,
+					"pattern": "^[a-zA-Z0-9_:.-]+$",
+					"description": "Module specifier the sandbox will import"
+				},
+				"source": {
+					"type": "string",
+					"minLength": 1,
+					"description": "JS source — must be valid ESM"
+				},
+				"version": {
+					"type": "string"
+				},
+				"description": {
+					"type": "string"
+				},
+				"allowed_imports": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"slug",
+				"source"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "phone_call_hangup",
+		"descriptionSha256": "ee00aa800427885e9e0b3e8e9e0f6f8526f6bb98d1bed656ea33d3a169006047",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"call_id": {
+					"type": "string",
+					"description": "call_id returned by phone_call_start"
+				}
+			},
+			"required": [
+				"call_id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "phone_call_start",
+		"descriptionSha256": "45af5e2f4ee8795932520991b28badc9436ef32a2b1adfc97385e6cbb1f74e83",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"to": {
+					"type": "string",
+					"pattern": "^\\+[1-9]\\d{6,14}$",
+					"description": "Number to call, E.164 (e.g. +18008291040)"
+				},
+				"goal": {
+					"type": "string",
+					"minLength": 5,
+					"maxLength": 4000,
+					"description": "What the call should achieve, in plain language"
+				},
+				"context": {
+					"type": "string",
+					"maxLength": 6000,
+					"description": "Facts the agent may use on the call: who it is calling for, account/reference numbers, dates, callback number. Everything here can be spoken aloud."
+				},
+				"notify_channel": {
+					"type": "string",
+					"enum": [
+						"tg",
+						"wa",
+						"dc",
+						"sl"
+					],
+					"description": "Enqueue the result as a task for this channel when the call ends"
+				},
+				"notify_chat_id": {
+					"type": "string",
+					"description": "Chat id for notify_channel"
+				},
+				"max_minutes": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 240,
+					"default": 90,
+					"description": "Hard cap on call length including hold time (default 90)"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"to",
+				"goal"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "phone_call_status",
+		"descriptionSha256": "e95d9099f165b80afcd4c431f8b53b60f86d02f71301b193d7709fa6817d22fd",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"call_id": {
+					"type": "string",
+					"description": "call_id returned by phone_call_start"
+				},
+				"wait_seconds": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 120,
+					"default": 0,
+					"description": "Block up to this long waiting for the call to end"
+				}
+			},
+			"required": [
+				"call_id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "plan_approve",
+		"descriptionSha256": "f3fbe3105d6ccc2e2b76ecb9a93b838d4bb66c4dd87135207c801d950ee67e9c",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"plan_id": {
+					"type": "string"
+				}
+			},
+			"required": [
+				"plan_id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "plan_draft",
+		"descriptionSha256": "d47ced38342aeb6a22890232a19c8294a6139bd643a83d69f77515802b28ec6a",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"steps": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"description": {
+								"type": "string"
+							},
+							"tool": {
+								"type": "string"
+							},
+							"risk": {
+								"type": "string",
+								"enum": [
+									"low",
+									"med",
+									"high"
+								],
+								"default": "low"
+							}
+						},
+						"required": [
+							"description"
+						],
+						"additionalProperties": false
+					}
+				}
+			},
+			"required": [
+				"steps"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "profile_update",
+		"descriptionSha256": "c62dc21f114ddde4b532fdadd1ff7011b08b264fe958e0b034e067596c3b5892",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"target": {
+					"type": "string",
+					"enum": [
+						"agent",
+						"user"
+					],
+					"description": "Which doc to edit"
+				},
+				"action": {
+					"type": "string",
+					"enum": [
+						"add",
+						"replace",
+						"remove"
+					],
+					"description": "Edit operation"
+				},
+				"content": {
+					"type": "string",
+					"description": "New line (add) or replacement text (replace)"
+				},
+				"match": {
+					"type": "string",
+					"description": "Substring identifying the text to replace, or the line(s) to remove"
+				}
+			},
+			"required": [
+				"target",
+				"action"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "retriever_delete",
+		"descriptionSha256": "a448c6b3790b537d7d81a311155ef89cb33612fe6dc63613463c69e6da35f228",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"name"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "retriever_get",
+		"descriptionSha256": "fb60a6bc701e907769e9bd0afe54ef34c39bfb3069ecf0c9c2f32570324b57ec",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1
+				}
+			},
+			"required": [
+				"name"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "retriever_list",
+		"descriptionSha256": "70905faa604af31937c60cc6aa2f3d6f28bddfdaaca02b9342bd4cbd8831436a",
+		"inputSchema": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {}
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "retriever_run",
+		"descriptionSha256": "1c7451b271ba14cfb18eb50ea386b2dfae755a9eef438e67e85dae21ed3b318a",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1
+				},
+				"params": {
+					"type": "object",
+					"additionalProperties": {}
+				}
+			},
+			"required": [
+				"name"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "retriever_set",
+		"descriptionSha256": "197a7aafff709bcd547909ecfaa1738d7bec9d8f10069bca5b76f207f467dcc0",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 64
+				},
+				"sql": {
+					"type": "string",
+					"minLength": 1
+				},
+				"description": {
+					"type": "string"
+				},
+				"param_schema": {
+					"type": "object",
+					"additionalProperties": {
+						"type": "string"
+					},
+					"description": "Map of param name → human-readable description"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"name",
+				"sql"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "schedule_create",
+		"descriptionSha256": "e74302f76abb25e4c55c60c4e502451375b736bcef4c174cfed849f316effd92",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"channel": {
+					"type": "string",
+					"enum": [
+						"tg",
+						"wa",
+						"dc",
+						"sl"
+					],
+					"description": "Channel whose chat receives any output"
+				},
+				"chat_id": {
+					"type": "string",
+					"description": "Chat id to deliver into (from the current task)"
+				},
+				"prompt": {
+					"type": "string",
+					"maxLength": 8000,
+					"description": "Self-contained runbook executed at each firing"
+				},
+				"every_minutes": {
+					"type": "integer",
+					"minimum": 5,
+					"maximum": 10080,
+					"description": "Recurring cadence in minutes (5-10080)"
+				},
+				"at": {
+					"type": [
+						"string",
+						"number"
+					],
+					"description": "One-shot firing time: ISO 8601 string or epoch ms"
+				}
+			},
+			"required": [
+				"channel",
+				"chat_id",
+				"prompt"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "schedule_delete",
+		"descriptionSha256": "2bf07892e6cf67ea9d5fff7c9bc95db42ec3bd55eda49fd82575a92993f4c2cb",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Schedule id (from schedule_create or schedule_list)"
+				}
+			},
+			"required": [
+				"id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "schedule_list",
+		"descriptionSha256": "3fbec357e859e75484478b3ef3ea56dfcbe4b765cb12671071bdc8c990cc17cb",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"include_disabled": {
+					"type": "boolean",
+					"default": false,
+					"description": "Include fired one-shots and disabled schedules"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "search",
+		"descriptionSha256": "3568df19de7552017187278ba6b433355346e16e4f93733c7e7f03e54e656e96",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"entity": {
+					"type": "string",
+					"description": "Exact entity lookup, e.g. \"memory_recall:capability\" or \"github-api:skill\""
+				},
+				"query": {
+					"type": "string",
+					"description": "Free-text query for ranked search"
+				},
+				"types": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"enum": [
+							"capability",
+							"package",
+							"value",
+							"connector",
+							"secret",
+							"memory",
+							"skill",
+							"retriever"
+						]
+					},
+					"description": "Restrict candidate sources"
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 50,
+					"default": 10
+				},
+				"memoryContext": {
+					"type": "object",
+					"properties": {
+						"task": {
+							"type": "string"
+						},
+						"query": {
+							"type": "string"
+						},
+						"entities": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"constraints": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "secret_approve_host",
+		"descriptionSha256": "ae5a7902b39aaa1a2565bfca97b91dfd4b43466b4bad26eb274fb3801c2f48d2",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1
+				},
+				"scope": {
+					"type": "string",
+					"enum": [
+						"user",
+						"app",
+						"session"
+					],
+					"default": "app"
+				},
+				"host": {
+					"type": "string",
+					"minLength": 1,
+					"description": "Hostname to approve (e.g. \"api.github.com\")"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"name",
+				"host"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "secret_delete",
+		"descriptionSha256": "2d3abf272d9c71098a889184addcda6cc36d87b00e3af8a40fec7f970523b768",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1
+				},
+				"scope": {
+					"type": "string",
+					"enum": [
+						"user",
+						"app",
+						"session"
+					],
+					"default": "app"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"name"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "secret_list",
+		"descriptionSha256": "9719a3d2cd672d11ffad6603d318c254a8a35c403ae566d001cfc5fdd8a9483c",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"scope": {
+					"type": "string",
+					"enum": [
+						"user",
+						"app",
+						"session"
+					],
+					"description": "Filter by scope"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "secret_resolve",
+		"descriptionSha256": "0c60ff776b3e8f7579fdbbaabd584c38c63a3f4a68282c3456c2a454fa5eca4a",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 128,
+					"description": "Secret name"
+				},
+				"scope": {
+					"type": "string",
+					"enum": [
+						"user",
+						"app",
+						"session"
+					],
+					"default": "app",
+					"description": "Visibility scope"
+				},
+				"purpose": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 256,
+					"description": "Human-readable justification, recorded in audit"
+				}
+			},
+			"required": [
+				"name",
+				"purpose"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": false,
+		"box": true
+	},
+	{
+		"name": "secret_set",
+		"descriptionSha256": "4e38e53f5b0d2576e11ab3c103703351ead7e6410744cb23abf9f5e1e4287a51",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 128,
+					"description": "Secret name (e.g. GITHUB_TOKEN)"
+				},
+				"value": {
+					"type": "string",
+					"minLength": 1,
+					"description": "The secret value"
+				},
+				"scope": {
+					"type": "string",
+					"enum": [
+						"user",
+						"app",
+						"session"
+					],
+					"default": "app",
+					"description": "Visibility scope"
+				},
+				"allowed_hosts": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"description": "Hosts the secret may be sent to (e.g. [\"api.github.com\"])"
+				},
+				"allowed_capabilities": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"description": "Capability names allowed to read this secret"
+				},
+				"allowed_packages": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"description": "Package slugs allowed to read this secret"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"name",
+				"value"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "session_search",
+		"descriptionSha256": "29d35edaa0c14428603a20d7b9409c3101ce9ca22b31b0e7cd9ab02e8097110a",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"query": {
+					"type": "string",
+					"description": "FTS5 search query (supports AND, OR, NOT, phrase \"quotes\")"
+				},
+				"limit": {
+					"type": "number",
+					"default": 20,
+					"description": "Maximum number of results"
+				}
+			},
+			"required": [
+				"query"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "session_set_mode",
+		"descriptionSha256": "719f8f93281f330113ad338eec42e69c48871a87e2ddc2b29169db281a8d6948",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"mode": {
+					"type": "string",
+					"enum": [
+						"chat",
+						"plan"
+					]
+				}
+			},
+			"required": [
+				"mode"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "skill_delete",
+		"descriptionSha256": "ef73d826bb27d65ad730d5b9085b57cc888c50954d28af0a3482fab8ebfa73a7",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"slug": {
+					"type": "string",
+					"description": "Skill slug to soft-delete"
+				}
+			},
+			"required": [
+				"slug"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "skill_load",
+		"descriptionSha256": "f67da487f99aee35bd3df9e40b9c3b88069653492e8054279d67a97233fc32a2",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"slug": {
+					"type": "string",
+					"description": "Skill slug, e.g. \"github-api\""
+				}
+			},
+			"required": [
+				"slug"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": true
+	},
+	{
+		"name": "skill_search",
+		"descriptionSha256": "5039e5246d3227ce85d19e92bb5adb92526b0a5029ffb7278b36760a78a964fa",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"query": {
+					"type": "string",
+					"description": "Search term, e.g. \"github\", \"oauth\", \"browser auth\""
+				},
+				"limit": {
+					"type": "number",
+					"default": 5,
+					"description": "Maximum number of results (1-50)"
+				}
+			},
+			"required": [
+				"query"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": true
+	},
+	{
+		"name": "skill_set",
+		"descriptionSha256": "f4e2644d8f8e1bc03f9b25dceacd1dbd19576ddc1b0592559a9d56e53e54fb77",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"slug": {
+					"type": "string",
+					"description": "Lowercase slug with dashes, e.g. \"github-api\""
+				},
+				"body": {
+					"type": "string",
+					"description": "SKILL.md content; may include ----fenced frontmatter"
+				},
+				"metadata": {
+					"type": "object",
+					"properties": {
+						"name": {
+							"type": "string"
+						},
+						"description": {
+							"type": "string"
+						},
+						"keywords": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"allowed_tools": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						}
+					},
+					"additionalProperties": false,
+					"description": "Overrides for frontmatter name/description/keywords/allowed_tools"
+				},
+				"origin_memory_id": {
+					"type": "number",
+					"description": "Memory id this skill was promoted from (sets source=promoted_from_memory)"
+				}
+			},
+			"required": [
+				"slug",
+				"body"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "task_claim",
+		"descriptionSha256": "32e40346cae757dc3afd2950d1cefdef8ebd19786ff45519255abc4eab2cdeb0",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 10,
+					"default": 3,
+					"description": "Maximum number of tasks to claim"
+				},
+				"stale_minutes": {
+					"type": "number",
+					"description": "Reclaim tasks claimed longer than this many minutes ago (default 15)"
+				},
+				"queue": {
+					"type": "string",
+					"description": "Only claim from this queue (default main)"
+				},
+				"claimed_by": {
+					"type": "string",
+					"description": "Worker identity (box id); recorded on the claim and required to complete"
+				},
+				"lease_minutes": {
+					"type": "number",
+					"description": "Lease duration; the task is reclaimable after it expires (default 15)"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "task_complete",
+		"descriptionSha256": "a0df1c2c5306b339e27b85d06c733264be27f066e83375d99f975edaf329cdf5",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Task id returned by task_claim"
+				},
+				"status": {
+					"type": "string",
+					"enum": [
+						"done",
+						"failed"
+					],
+					"default": "done",
+					"description": "Final task status"
+				},
+				"result": {
+					"type": "string",
+					"description": "One-line summary of the outcome"
+				},
+				"claimed_by": {
+					"type": "string",
+					"description": "Worker identity; must match the claim when provided"
+				}
+			},
+			"required": [
+				"id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "task_enqueue",
+		"descriptionSha256": "fd30a13ef6c3581619fca1e8aea2354d75ab89ca85419435533d8ec52495cfc6",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"channel": {
+					"type": "string",
+					"enum": [
+						"tg",
+						"wa",
+						"dc",
+						"sl",
+						"cloud"
+					],
+					"description": "Channel the task belongs to"
+				},
+				"sender": {
+					"type": "string",
+					"description": "Channel-specific sender id"
+				},
+				"chat_id": {
+					"type": "string",
+					"description": "Channel-specific chat id for the eventual reply"
+				},
+				"payload": {
+					"type": "string",
+					"description": "The task content (usually the inbound message text)"
+				},
+				"queue": {
+					"type": "string",
+					"description": "Work queue; workers only claim from their own queue (default main)"
+				},
+				"parent_task_id": {
+					"type": "string",
+					"description": "Parent task id when this task is part of a fan-out"
+				}
+			},
+			"required": [
+				"channel",
+				"sender",
+				"chat_id",
+				"payload"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "task_list",
+		"descriptionSha256": "140277475080e3dbc2fdadebffbefae0eb5e8aab0b835fa358f227841442f2e0",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"status": {
+					"type": "string",
+					"enum": [
+						"pending",
+						"claimed",
+						"done",
+						"failed"
+					],
+					"description": "Filter by task status"
+				},
+				"limit": {
+					"type": "number",
+					"default": 20,
+					"description": "Maximum number of tasks to return"
+				},
+				"queue": {
+					"type": "string",
+					"description": "Filter by work queue"
+				},
+				"parent_task_id": {
+					"type": "string",
+					"description": "List a fan-out: all children of this parent task"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "task_wait",
+		"descriptionSha256": "6bd7adaad9007890e37b600f1b87a1f70b414ea0fdf36fa342ea3f186f7a1bd9",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Task id to wait on"
+				},
+				"timeout_seconds": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 120,
+					"default": 30,
+					"description": "How long to wait before returning timeout"
+				},
+				"poll_seconds": {
+					"type": "number",
+					"minimum": 0.5,
+					"maximum": 30,
+					"default": 2,
+					"description": "Polling interval"
+				}
+			},
+			"required": [
+				"id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "team_spawn",
+		"descriptionSha256": "a6770b742d4eb924a11f6edfb32f00a6030b004037ba7ac1782552af1cab8817",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"role": {
+					"type": "string",
+					"enum": [
+						"researcher",
+						"writer",
+						"verifier",
+						"planner",
+						"executor"
+					]
+				},
+				"instructions": {
+					"type": "string"
+				},
+				"allowed_tools": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Optional list of tool names the subagent may use"
+				}
+			},
+			"required": [
+				"role",
+				"instructions"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "med",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "totp_setup",
+		"descriptionSha256": "29126c5a9655163b0587f8e2a3a378a2b38a5c31a42fbb4e094bd4fd72c6a060",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"label": {
+					"type": "string",
+					"default": "owner",
+					"description": "Label for the TOTP entry in your authenticator app"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "usage_stats",
+		"descriptionSha256": "d009a6a08eaac5576476a65ee22efccb68ee361d10f55add446204453b128834",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"since": {
+					"type": "string",
+					"description": "Window start: relative like '7d'/'24h' or epoch ms. Default '30d'."
+				},
+				"group_by": {
+					"type": "string",
+					"enum": [
+						"tool",
+						"day",
+						"risk",
+						"outcome"
+					],
+					"default": "tool",
+					"description": "Aggregation dimension"
+				},
+				"tool": {
+					"type": "string",
+					"description": "Restrict stats to a single tool name"
+				},
+				"sort": {
+					"type": "string",
+					"enum": [
+						"calls",
+						"est_tokens"
+					],
+					"default": "calls",
+					"description": "Row ordering: most-called or most token-hungry first"
+				},
+				"limit": {
+					"type": "number",
+					"default": 25,
+					"description": "Maximum number of rows (1-100)"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "web_session_capture",
+		"descriptionSha256": "7a9f1918c3f759727cb9f01ed9f9c37e0e45f7097926c6bd24a93e78e694e192",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"description": "Session name, e.g. chatgpt"
+				},
+				"site": {
+					"type": "string",
+					"minLength": 1,
+					"description": "Origin the session is for, e.g. https://chatgpt.com"
+				},
+				"storage_state": {
+					"type": "string",
+					"minLength": 2,
+					"description": "Playwright storageState JSON (cookies + origins)"
+				},
+				"max_concurrent": {
+					"type": "integer",
+					"minimum": 1,
+					"default": 1,
+					"description": "Max simultaneous box leases"
+				},
+				"allowed_boxes": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Restrict to these box ids (empty = any box)"
+				},
+				"ttl_seconds": {
+					"type": "integer",
+					"exclusiveMinimum": 0,
+					"description": "Session lifetime"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"name",
+				"site",
+				"storage_state"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "web_session_get",
+		"descriptionSha256": "8ad16647ceda4eeb7fda6327c4601bae890ed62deea83f9b9b3671edfd07f560",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string"
+				}
+			},
+			"required": [
+				"name"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	},
+	{
+		"name": "web_session_invalidate",
+		"descriptionSha256": "7e5c0224270e8e9f302d8c9f23af961cd63b9d159da4b2c16a46d45f21a27f29",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string"
+				},
+				"approval_token": {
+					"type": "string",
+					"description": "Approval token for high-risk tool execution"
+				}
+			},
+			"required": [
+				"name"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "high",
+		"mutates": true,
+		"box": false
+	},
+	{
+		"name": "web_session_list",
+		"descriptionSha256": "98124b3782afed98450d95012dc4884b6dfa9cb031e01d2796754afb48e662b5",
+		"inputSchema": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {}
+		},
+		"risk": "low",
+		"mutates": false,
+		"box": false
+	}
+]
