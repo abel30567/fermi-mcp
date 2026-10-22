@@ -8,6 +8,7 @@ The main Cloudflare Worker that serves as the MCP server.
 - **wrangler.template.jsonc** — Template with `__PLACEHOLDER__` tokens. Committed.
 - **vitest.config.ts** — Test configuration using Cloudflare Workers pool
 - **vitest.contract.config.ts** / **wrangler.test.jsonc** — MCP contract project: boots the real worker entry and drives it over `/mcp` via `SELF.fetch` (`test/contract/`)
+- **wrangler.eval.jsonc** — Local-only eval target (see "Running the eval target" in the README); seeded and dumped by `scripts/eval-seed.mjs` / `scripts/eval-dump.mjs`
 - **worker-configuration.d.ts** — Auto-generated type definitions for Worker bindings
 
 ## Subdirectories

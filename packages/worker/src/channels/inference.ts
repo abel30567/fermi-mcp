@@ -5,6 +5,7 @@ import type {
 	Tool,
 	ToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/messages.js'
+import { apiBase } from '../lib/api-base.ts'
 import { isOverBudget, recordUsage } from '../lib/budget.ts'
 
 export interface ChannelContext {
@@ -180,7 +181,7 @@ export async function runAgentTurn(
 		return runWorkersFallback(message, env)
 	}
 
-	const client = new Anthropic({ apiKey })
+	const client = new Anthropic({ apiKey, baseURL: apiBase(env, 'ANTHROPIC_API_BASE') })
 	const tools = getToolDefinitions()
 	const messages: MessageParam[] = [{ role: 'user', content: message }]
 
