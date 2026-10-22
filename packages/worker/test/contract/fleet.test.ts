@@ -120,6 +120,34 @@ describeTool('cloud_agent_launch', () => {
 		expect(await boxIds()).toEqual([])
 	})
 
+	it('treats a multi-file runner manifest as pinned (MCP-22)', async () => {
+		await env.FERMI_KV.put(
+			'fleet:config',
+			JSON.stringify({
+				runner_ref: 'v1',
+				runner_files: { 'box-runner.mjs': 'a'.repeat(64), 'lib/report.mjs': 'b'.repeat(64) },
+				default_env: 'node',
+			}),
+		)
+		await env.FERMI_KV.put('cloudenv:node', JSON.stringify({ name: 'node', image_ref: 'ami-1' }))
+		const launched = await launch()
+		expect(launched.provision).toEqual({ dispatched: false, reason: 'aws_credentials_missing' })
+	})
+
+	it('fails closed on a runner manifest without box-runner.mjs (MCP-22)', async () => {
+		await env.FERMI_KV.put(
+			'fleet:config',
+			JSON.stringify({
+				runner_ref: 'v1',
+				runner_files: { 'lib/report.mjs': 'b'.repeat(64) },
+				default_env: 'node',
+			}),
+		)
+		const launched = await launch()
+		expect(launched.provision).toEqual({ dispatched: false, reason: 'runner_pin_unset' })
+		expect(await boxIds()).toEqual([])
+	})
+
 	it('rejects a free-text proof contract', async () => {
 		const launched = await launch({ ...LAUNCH, proof_contract: 'make it look good please' })
 		expect(launched.ok).toBe(false)
