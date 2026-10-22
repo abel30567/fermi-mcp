@@ -44,6 +44,9 @@
 		"FERMI_ENV": "development",
 		"FERMI_SECRETS_KEY": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
 		"MACOS_MCP_URL": "http://mac.test",
+		// Fake credentials so mac_* and team_spawn reach their (fetchMock-ed) APIs.
+		"MACOS_MCP_TOKEN": "mac-contract-token",
+		"ANTHROPIC_API_KEY": "sk-ant-contract-token",
 		// Fake bot tokens so channel_send/channel_read reach their (fetchMock-ed) APIs.
 		"TELEGRAM_BOT_TOKEN": "tg-contract-token",
 		"SLACK_BOT_TOKEN": "xoxb-contract-token",
