@@ -140,6 +140,33 @@ bun run migrate:local  # apply D1 migrations locally
 bun run test           # vitest (worker package): unit + MCP contract projects
 ```
 
+### Running the eval target
+
+`packages/worker/wrangler.eval.jsonc` runs the real worker fully locally for the live
+harness evals: no Cloudflare login, no remote ids, auth off. Outbound APIs are pointed
+at local fakes with `SLACK_API_BASE`, `TELEGRAM_API_BASE`, `DISCORD_API_BASE`,
+`TWILIO_API_BASE` and `ANTHROPIC_API_BASE` (unset means the real service).
+`MACOS_MCP_URL` and any tokens come from the same env file.
+
+```bash
+cd packages/worker
+cat > /tmp/fermi-eval.env <<EOF
+SLACK_API_BASE=http://127.0.0.1:9101
+SLACK_BOT_TOKEN=xoxb-fake
+MACOS_MCP_URL=http://127.0.0.1:9102
+EOF
+STATE=/tmp/fermi-eval/state
+wrangler dev --local --config wrangler.eval.jsonc --port 8787 --persist-to $STATE \
+  --env-file /tmp/fermi-eval.env &
+node scripts/eval-seed.mjs test/fixtures/eval/sample.json --persist-to $STATE
+# ... run the eval against http://127.0.0.1:8787/mcp ...
+node scripts/eval-dump.mjs --persist-to $STATE > dump.json
+```
+
+`eval-seed` applies the D1 migrations, then replaces the profile, memories, allowlist
+and tasks with the fixture's. `eval-dump` prints profile, memories, allowlist, tasks,
+outbox, schedules and audit as JSON.
+
 ## Configuration
 
 Secrets are set with `wrangler secret put` (values entered interactively):
