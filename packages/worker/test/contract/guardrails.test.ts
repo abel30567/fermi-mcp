@@ -108,6 +108,48 @@ describe('MCP contract: defineTool guardrails', () => {
 		expect(replay).toEqual({ status: 'denied', reason: 'Invalid or expired approval token' })
 	})
 
+	it('20 concurrent redeems of one token yield exactly one success', async () => {
+		const args = { name: 'contract_r5', sql: 'SELECT 1' }
+		const pending = resultJson<{ status: string; token: string }>(
+			await (await session()).callTool('retriever_set', args),
+		)
+		expect(pending.status).toBe('pending_approval')
+
+		// One session (FermiMCP Durable Object) per redeem, so the calls really run in parallel.
+		const clients = await Promise.all(Array.from({ length: 20 }, () => session()))
+		const results = await Promise.all(
+			clients.map(async (c) =>
+				resultJson(await c.callTool('retriever_set', { ...args, approval_token: pending.token })),
+			),
+		)
+		const stored = results.filter((r) => r.status === 'stored')
+		const denied = results.filter((r) => r.reason === 'Invalid or expired approval token')
+		expect(stored).toHaveLength(1)
+		expect(denied).toHaveLength(19)
+		expect((await auditRows('retriever_set')).filter((r) => r.outcome === 'ok')).toHaveLength(1)
+	})
+
+	it('an approval token expires after its 300 s TTL', async () => {
+		const client = await session()
+		const args = { name: 'contract_r6', sql: 'SELECT 1' }
+		const pending = resultJson<{ status: string; token: string }>(
+			await client.callTool('retriever_set', args),
+		)
+		const row = await env.FERMI_DB.prepare('SELECT expires_at FROM approval_tokens WHERE token = ?')
+			.bind(pending.token)
+			.first<{ expires_at: number }>()
+		expect(row?.expires_at).toBeGreaterThan(Date.now() + 299_000)
+		expect(row?.expires_at).toBeLessThanOrEqual(Date.now() + 300_000)
+
+		await env.FERMI_DB.prepare('UPDATE approval_tokens SET expires_at = ? WHERE token = ?')
+			.bind(Date.now() - 1, pending.token)
+			.run()
+		const expired = resultJson(
+			await client.callTool('retriever_set', { ...args, approval_token: pending.token }),
+		)
+		expect(expired).toEqual({ status: 'denied', reason: 'Invalid or expired approval token' })
+	})
+
 	it('a high-risk tool rejects a wrong token', async () => {
 		const client = await session()
 		const wrong = resultJson(
