@@ -122,10 +122,10 @@ describe('MCP contract: defineTool guardrails', () => {
 		expect(rows.results).toEqual([])
 	})
 
-	// Blocked on a human decision: the redeem leg checks token existence only
-	// (docs/ARCHITECTURE.md "the stored args_hash is not re-compared"), so a token
-	// minted for one set of args currently redeems a different set.
-	it.todo('a high-risk tool rejects its token when redeemed with different args')
+	// The redeem leg checks token existence only (docs/ARCHITECTURE.md "the stored
+	// args_hash is not re-compared"), so a token minted for one set of args currently
+	// redeems a different set.
+	it.todo('a high-risk tool rejects its token when redeemed with different args — fixed by MCP-19')
 
 	it('a tool:before hook with trust deny blocks the call', async () => {
 		const client = await session()
@@ -174,5 +174,18 @@ describe('MCP contract: defineTool guardrails', () => {
 			'ok',
 		)
 		await expectOneRow('retriever_get', { name: 'contract_r3' }, 'denied')
+	})
+
+	// Current contract: the plan-mode branch returns before writeAudit. MCP-19 makes it
+	// write one 'denied' row; flip this test to expect that.
+	it('plan-mode denial currently writes no audit row (MCP-19 flips this to one denied row)', async () => {
+		const client = await session()
+		await client.callTool('session_set_mode', { mode: 'plan' })
+		const before = (await auditRows('hooks_register')).length
+		const blocked = resultJson(
+			await client.callTool('hooks_register', { event: 'tool:before', trust_level: 'allow' }),
+		)
+		expect(blocked.error).toBe('plan_mode_restricted')
+		expect(await auditRows('hooks_register')).toHaveLength(before)
 	})
 })
