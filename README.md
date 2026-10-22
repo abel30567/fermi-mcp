@@ -52,7 +52,7 @@ One server, one memory, one permission spine — the host changes, the agent doe
 - **Durable Objects**: `FermiMCP` (the agent, SQLite-backed), `LiveCanvasDO`,
   `SandboxStorageDO`, `BrowserSessionDO`.
 - **Storage**: D1 (memory, sessions/messages + FTS5, audit, hooks, skills metadata,
-  secrets metadata, oauth), R2 (skills, files, apps), KV (config, approval tokens),
+  secrets metadata, oauth, approval tokens), R2 (skills, files, apps), KV (config),
   Workers AI (embeddings + summaries), Vectorize (semantic index).
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full diagram and data flow.
