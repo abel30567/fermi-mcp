@@ -7,7 +7,8 @@
 		"deploy": "wrangler deploy",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run --exclude 'test/contract/**' && vitest run -c vitest.contract.config.ts",
-		"test:contract": "vitest run -c vitest.contract.config.ts"
+		"test:contract": "vitest run -c vitest.contract.config.ts",
+		"tool-surface": "vitest run -c vitest.contract.config.ts test/contract/tool-surface.test.ts -u"
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.92.0",
