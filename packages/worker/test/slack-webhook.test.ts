@@ -24,11 +24,24 @@ const slackSent: SlackSend[] = []
 function interceptSlack() {
 	fetchMock
 		.get('https://slack.com')
-		.intercept({ path: '/api/chat.postMessage', method: 'POST' })
+		.intercept({
+			path: '/api/chat.postMessage',
+			method: 'POST',
+			body: (b) => !b.includes('"channel":"DFAIL'),
+		})
 		.reply(200, (opts) => {
 			slackSent.push(JSON.parse(String(opts.body)) as SlackSend)
 			return { ok: true }
 		})
+		.persist()
+	fetchMock
+		.get('https://slack.com')
+		.intercept({
+			path: '/api/chat.postMessage',
+			method: 'POST',
+			body: (b) => b.includes('"channel":"DFAIL'),
+		})
+		.reply(200, { ok: false, error: 'channel_not_found' })
 		.persist()
 }
 
@@ -228,6 +241,43 @@ describe('handleSlackBridgeWebhook', () => {
 		expect(await isAllowed(env.FERMI_DB, 'sl', 'U9')).toBe(true)
 		expect(await env.FERMI_KV.get('pairing:CODE1234')).toBeNull()
 		expect(slackSent.map((m) => m.channel).sort()).toEqual(['D-owner', 'D9'])
+		expect(await listTasks(env.FERMI_DB)).toHaveLength(0)
+	})
+	it('returns 200 and enqueues once when the ack send fails, so sl-bridge does not retry', async () => {
+		await addToAllowlist(env.FERMI_DB, { channel: 'sl', senderId: 'U2' })
+		const message = {
+			author_id: 'U2',
+			display_name: 'Cy',
+			channel_id: 'DFAIL1',
+			team_id: 'T9',
+			is_im: true,
+			text: 'do the thing',
+		}
+		// Mirror sl-bridge forwardToWorker: retry the same body on any non-2xx (4 attempts).
+		const statuses: number[] = []
+		for (let attempt = 0; attempt < 4; attempt++) {
+			const res = await handleSlackBridgeWebhook(
+				webhookRequest(message, 'test-sl-secret'),
+				workerEnv,
+			).catch(() => new Response('error', { status: 500 }))
+			statuses.push(res.status)
+			if (res.ok) break
+		}
+		expect(statuses).toEqual([200])
+		const tasks = await listTasks(env.FERMI_DB, { status: 'pending' })
+		expect(tasks).toHaveLength(1)
+		expect(tasks[0]).toMatchObject({ sender: 'U2', chat_id: 'DFAIL1', payload: 'do the thing' })
+	})
+
+	it('returns 200 when the pairing code send fails', async () => {
+		const res = await handleSlackBridgeWebhook(
+			webhookRequest(
+				{ author_id: 'U3', channel_id: 'DFAIL2', team_id: 'T9', is_im: true, text: 'hi' },
+				'test-sl-secret',
+			),
+			workerEnv,
+		)
+		expect(res.status).toBe(200)
 		expect(await listTasks(env.FERMI_DB)).toHaveLength(0)
 	})
 })
