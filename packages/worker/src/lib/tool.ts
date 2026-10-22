@@ -177,7 +177,18 @@ export async function runWithGuardrails<R>(
 	}
 }
 
+// Guardrail metadata of every tool passed to defineTool(), for any principal.
+// tools/list does not carry risk or mutates; the tool-surface contract test reads them here.
+export const TOOL_REGISTRY = new Map<string, GuardrailDef>()
+
 export function defineTool<T extends Record<string, z.ZodType>>(agent: FermiMCP, def: ToolDef<T>) {
+	TOOL_REGISTRY.set(def.name, {
+		name: def.name,
+		scope: def.scope,
+		risk: def.risk,
+		mutates: def.mutates,
+	})
+
 	const schema =
 		def.risk === 'high'
 			? {
