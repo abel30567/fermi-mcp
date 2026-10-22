@@ -1,0 +1,12 @@
+<!-- project-rules.md — pasted into EVERY worker prompt; the verifier uses it as a checklist. -->
+- This repository is PUBLIC. Never commit secrets, tokens, account or resource IDs (Cloudflare account/D1/KV/R2 ids), real phone numbers, emails, personal names, absolute home paths (`/Users/...`) or the production worker URL. Use placeholders (`fermi.example.workers.dev`, `+15555550100`, `owner@example.com`). Before every push run `git diff origin/BASE --stat` and `git grep -nE "workers\.dev|/Users/|@gmail|\+1[0-9]{10}"` on your changes and remove any hit that is not a placeholder.
+- Never touch production: no `wrangler deploy`/`secret`/`--remote`, no requests to the production Fermi URL, no `launchctl`, nothing under `~/fermi-daemon` (the live daemon) or `~/git/` (private repos). Work only inside your worktree; use your assigned `$PORT` for any local server.
+- Tests never use the network or real credentials: mock outbound HTTP, use fixtures and fake harness binaries. Never run a real agent harness (`claude`, `pi`, `codex`, hbar) against a real account from tests or gates; live inference is orchestrator-only.
+- Every behaviour change ships with a test that fails without the change.
+- Do not add dependencies unless the task says so. Do not edit CI, deploy or infrastructure config unless the task is about it.
+- Stay inside the task scope. If the task conflicts with the code you find, post `[BUILDER] BLOCKED` instead of widening scope.
+- Run `bunx biome check --fix .` before committing (CI runs biome; never rely on a CI auto-fix commit).
+- Worker tests live in `packages/worker/test/` (vitest + @cloudflare/vitest-pool-workers); outbound HTTP via `fetchMock` with `disableNetConnect()`.
+- MCP tool names match `^[a-zA-Z0-9_-]{1,64}$` (no dots). Never rename or remove an existing tool or argument unless the task says so: the daemon prompts depend on them.
+- D1 schema changes need a new numbered migration in `packages/worker/migrations/`; never edit an applied migration.
+- Follow the folder `CLAUDE.md` files you touch (`packages/worker/**/CLAUDE.md`).

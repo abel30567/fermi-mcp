@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# orch — one entry point for the orchestrator. Run `orch help`.
+set -euo pipefail
+D="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" && pwd)"
+py() { python3 -I "$D/$1" "${@:2}"; }
+cmd=${1:-help}; shift || true
+case "$cmd" in
+  doctor)   exec "$D/doctor.sh" ;;
+  selftest) node --test "$D/hooks/worker-guard.test.mjs" && for f in "$D"/*.sh "$D/orch"; do bash -n "$f"; done \
+              && python3 -I -m py_compile "$D"/*.py "$D"/tracker/*.py && echo "selftest ok" ;;
+  labels)   . "$D/config.sh"
+            while IFS='|' read -r n c d; do gh label create "$n" -R "$GH_REPO" --color "$c" --description "$d" --force >/dev/null && echo "label $n"; done <<'L'
+tracked|0052CC|On the orchestrator board
+follow-up|BFD4F2|Non-blocking follow-up from a review
+status:ready|1D76DB|Triaged; ready for a builder
+status:blocked|B60205|Blocked; needs a human
+merge:hold|FBCA04|Merge gate must skip this PR
+env:staging|F9D0C4|Shipped to staging
+L
+            ;;
+  baseline) exec "$D/baseline.sh" ;;
+  task)     exec "$D/task.sh" "$@" ;;
+  launch)   exec "$D/launch.sh" "$@" ;;
+  status)   py heartbeat.py ;;
+  merge)    py merge-gate.py "$@" ;;
+  board)    py board.py "$@" ;;
+  risk)     py risk.py "$@" ;;
+  usage)    py usage.py ;;
+  cleanup)  exec "$D/cleanup-idle.sh" ;;
+  sync-jira) py tracker/jira-sync.py "$@" ;;
+  logs)     . "$D/config.sh"; id=${1:?worker id, e.g. PROJ-12 or V34}
+            f=$(ls -t "$STATE"/logs/*-"$id".log 2>/dev/null | head -1); [ -n "$f" ] || { echo "no log for $id"; exit 1; }
+            tail -n "${2:-40}" "$f"; r="${f/logs/runs}"; r="${r%.log}.json"; [ -s "$r" ] && { echo "--- result"; tail -c 1500 "$r"; echo; } ;;
+  stop)     . "$D/config.sh"; id=${1:?worker id}; pid=$(cat "$STATE/state/$id.pid" 2>/dev/null || true)
+            [ -n "$pid" ] && kill "$pid" 2>/dev/null && echo "stopped $id (pid $pid)" || echo "$id is not running" ;;
+  freeze)   . "$D/config.sh"; touch "$STATE/FREEZE"; echo "FREEZE on: no new launches" ;;
+  unfreeze) . "$D/config.sh"; rm -f "$STATE/FREEZE"; echo "FREEZE off" ;;
+  help|-h|--help) cat <<'H'
+orch — run parallel agent workers through GitHub pull requests
+
+setup
+  orch doctor                         check tools, GitHub login, config; says how to fix each problem
+  orch selftest                       guard-hook tests + syntax check of every script
+  orch labels                         create the board labels in the GitHub repo
+  orch baseline                       run GATES on a clean base branch -> baseline.txt
+
+one task, start to finish
+  orch task "summary" [body.md]       create a tracked GitHub issue -> key ISSUE-<n>
+  orch launch builder KEY slug "TASK" builder writes code + tests, opens the PR, posts [BUILDER] READY
+  orch launch verifier PR "criteria"  independent reviewer re-runs the gates, posts VERIFIED / CHANGES REQUESTED
+  orch launch fixer PR "focus"        addresses F1..Fn, posts [BUILDER] ADDRESSED
+  orch launch br PR "focus"           blast-radius review, only when `orch risk PR --reasons` is non-empty
+  orch merge [--apply]                merge gate: at most ONE PR per run, only when every rule holds
+
+watching
+  orch status                         workers, every open PR's state and next step, disk
+  orch board [--apply]                kanban (secret gist); `board setup|sync --apply` for a GitHub Project
+  orch logs ID [N]                    tail a worker's log + result (ID = KEY, V<PR>, BR<PR>)
+  orch usage                          tokens and minutes per worker run
+  orch stop ID | freeze | unfreeze    stop one worker | stop all new launches | resume
+  orch cleanup                        delete finished worktrees
+  orch sync-jira [--apply]            optional: mirror Jira tickets into tracked issues
+H
+  ;;
+  *) echo "unknown command '$cmd' (orch help)"; exit 2 ;;
+esac
