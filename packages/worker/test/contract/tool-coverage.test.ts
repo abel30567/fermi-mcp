@@ -8,7 +8,7 @@ import uncovered from './uncovered.json'
 
 // Equals the number of entries in uncovered.json. It may only go down: a PR that
 // covers tools removes them from uncovered.json and lowers this to the new count.
-const UNCOVERED_CEILING = 70
+const UNCOVERED_CEILING = 53
 
 const SOURCES = import.meta.glob<string>(['./**/*.ts', '!./tool-coverage.test.ts'], {
 	query: '?raw',
