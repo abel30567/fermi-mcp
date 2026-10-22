@@ -1,5 +1,6 @@
 import { applyD1Migrations, env, fetchMock } from 'cloudflare:test'
 import { beforeAll, beforeEach } from 'vitest'
+import { macBridgeReply } from './fake-mac.ts'
 
 // The contract project shares one D1 across tests (isolatedStorage is off for
 // the McpAgent Durable Objects), so build the real schema once from
@@ -16,7 +17,7 @@ beforeAll(async () => {
 	fetchMock
 		.get('http://mac.test')
 		.intercept({ path: /.*/, method: /.*/ })
-		.reply(503, { error: 'mac bridge mocked offline in contract tests' })
+		.reply(macBridgeReply)
 		.persist()
 })
 
