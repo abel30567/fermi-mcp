@@ -45,5 +45,7 @@
 		{ "new_sqlite_classes": ["PhoneCallDO"], "tag": "v6" }
 	],
 	"triggers": { "crons": ["0 3 * * *", "0 8 * * *", "0 2 * * SUN", "0 */6 * * *", "*/5 * * * *"] },
+	// FERMI_PUBLIC_URL (optional var or secret): public https origin of this deployment, used for
+	// canvas and OAuth links. Unset: http://localhost:8787 in development, else fermi.example.workers.dev.
 	"vars": { "FERMI_ENV": "development", "CF_ACCOUNT_ID": "__CF_ACCOUNT_ID__" }
 }
