@@ -1,3 +1,5 @@
+import { publicBaseUrl } from './public-url.ts'
+
 export async function patchCanvas(
 	canvasId: string,
 	patch: Record<string, unknown>,
@@ -21,8 +23,7 @@ export async function createCanvas(
 	env: Env,
 ): Promise<{ canvas_id: string; url: string; status: string }> {
 	const canvasId = crypto.randomUUID()
-	const baseUrl =
-		env.FERMI_ENV === 'development' ? 'http://localhost:8787' : 'https://fermi.example.workers.dev'
+	const baseUrl = publicBaseUrl(env)
 	await patchCanvas(
 		canvasId,
 		{
