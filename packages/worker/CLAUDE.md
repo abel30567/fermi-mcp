@@ -14,7 +14,7 @@ The main Cloudflare Worker that serves as the MCP server.
 
 ## Contract coverage
 
-Cover a tool with `describeTool('<name>', ...)` from `test/contract/describe-tool.ts`. `tool-coverage.test.ts` fails when a registered tool has no such block and is not in `test/contract/uncovered.json`; that allowlist may only shrink, so remove a tool's entry when you cover it.
+Cover a tool with `describeTool('<name>', ...)` from `test/contract/describe-tool.ts`. `tool-coverage.test.ts` fails when a registered tool has no such block, so every new tool needs one.
 
 Outbound HTTP is refused unless a test mocks it with `fetchMock`. The macOS bridge (`http://mac.test`) answers 503 by default; install a fake with `setMacBridge()` from `test/contract/fake-mac.ts`. High-risk tools go through `callApproved()` in `test/contract/approval.ts`.
 
