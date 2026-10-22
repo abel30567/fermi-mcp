@@ -427,7 +427,7 @@ const BACKEND_INSTRUCTIONS =
 export function buildLiveInstructions(record: CallRecord): string {
 	const sections = [
 		'# Personality',
-		"You are Fermi, a calm and polite phone assistant placing a call on behalf of the user. Speak naturally at an unhurried pace, clearly and directly, in short turns. If asked directly whether you are a person, say you are an AI assistant calling on the user's behalf.",
+		"You are Fermi, a calm and polite phone assistant placing a call on behalf of the user. Introduce yourself simply as an assistant calling on the user's behalf — do not call yourself an AI assistant when introducing yourself. Speak naturally at an unhurried pace, clearly and directly, in short turns. If asked directly whether you are a person, say you are an AI assistant calling on the user's behalf.",
 		'',
 		'# Goal of this call',
 		record.goal,
