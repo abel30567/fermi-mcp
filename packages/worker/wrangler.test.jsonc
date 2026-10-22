@@ -1,0 +1,48 @@
+// Local-only config for the MCP contract tests (vitest.contract.config.ts): the
+// real worker entry with local D1/KV/R2 and every Durable Object. AI, Vectorize,
+// LOADER and browser bindings are absent so the code takes its fallbacks.
+// FERMI_AUTH_ENABLED is unset, so /mcp is served without OAuth.
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "fermi-contract-test",
+	"compatibility_date": "2026-04-28",
+	"compatibility_flags": ["nodejs_compat"],
+	"main": "./src/index.ts",
+	"rules": [{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true }],
+	"d1_databases": [
+		{
+			"binding": "FERMI_DB",
+			"database_name": "fermi-contract-test",
+			"database_id": "00000000-0000-0000-0000-000000000000",
+			"migrations_dir": "./migrations"
+		}
+	],
+	"r2_buckets": [{ "binding": "FERMI_BUCKET", "bucket_name": "fermi-contract-test" }],
+	"kv_namespaces": [
+		{ "binding": "FERMI_KV", "id": "fermi-contract-test-kv" },
+		{ "binding": "OAUTH_KV", "id": "fermi-contract-test-oauth" }
+	],
+	"durable_objects": {
+		"bindings": [
+			{ "class_name": "FermiMCP", "name": "MCP_OBJECT" },
+			{ "class_name": "LiveCanvasDO", "name": "CANVAS_DO" },
+			{ "class_name": "SandboxStorageDO", "name": "SANDBOX_STORAGE" },
+			{ "class_name": "BrowserSessionDO", "name": "BROWSER_SESSION" },
+			{ "class_name": "FleetDO", "name": "FLEET_DO" },
+			{ "class_name": "PhoneCallDO", "name": "PHONE_CALL" }
+		]
+	},
+	"migrations": [
+		{ "new_sqlite_classes": ["FermiMCP"], "tag": "v1" },
+		{ "new_sqlite_classes": ["LiveCanvasDO"], "tag": "v2" },
+		{ "new_sqlite_classes": ["SandboxStorageDO"], "tag": "v3" },
+		{ "new_sqlite_classes": ["BrowserSessionDO"], "tag": "v4" },
+		{ "new_sqlite_classes": ["FleetDO"], "tag": "v5" },
+		{ "new_sqlite_classes": ["PhoneCallDO"], "tag": "v6" }
+	],
+	"vars": {
+		"FERMI_ENV": "development",
+		"FERMI_SECRETS_KEY": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+		"MACOS_MCP_URL": "http://mac.test"
+	}
+}
