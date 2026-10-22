@@ -27,7 +27,9 @@ describe('eval seed/dump', () => {
 	it('round-trips the sample fixture', async () => {
 		await seed(fixture)
 		const out = await dump()
-		expect(out).toMatchObject(fixture)
+		// Skills are seeded over MCP (test/contract/eval-seed-skills.test.ts).
+		const { skills: _skills, ...d1Fixture } = fixture
+		expect(out).toMatchObject(d1Fixture)
 		expect(out.tasks[0].status).toBe('pending')
 		expect(Object.keys(out)).toEqual([
 			'profile',
@@ -36,6 +38,7 @@ describe('eval seed/dump', () => {
 			'tasks',
 			'outbox',
 			'schedules',
+			'skills',
 			'audit',
 		])
 	})

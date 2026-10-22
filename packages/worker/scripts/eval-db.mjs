@@ -1,5 +1,5 @@
-// SQL shared by eval-seed.mjs and eval-dump.mjs. No Node imports, so the
-// round-trip test can run the same statements against the test D1.
+// SQL and MCP calls shared by eval-seed.mjs and eval-dump.mjs. No Node imports,
+// so the tests can run the same statements and calls against the test worker.
 
 const sql = (value) => {
 	if (value === null || value === undefined) return 'NULL'
@@ -58,6 +58,8 @@ export const DUMP_QUERIES = {
 	tasks: 'SELECT * FROM tasks ORDER BY created_at, id',
 	outbox: 'SELECT * FROM outbox ORDER BY created_at, id',
 	schedules: 'SELECT * FROM schedules ORDER BY created_at, id',
+	skills:
+		'SELECT slug, name, description, keywords, allowed_tools, version, source, decayed_at FROM skills ORDER BY slug',
 	audit: 'SELECT * FROM audit ORDER BY id',
 }
 
@@ -68,4 +70,63 @@ export function shapeDump(rowSets) {
 	dump.profile = Object.fromEntries(dump.profile.map((r) => [r.name, r.body]))
 	dump.memories = dump.memories.map((m) => ({ ...m, pinned: m.pinned === 1 }))
 	return dump
+}
+
+/** First JSON-RPC message of a streamable-HTTP MCP response (JSON or SSE body). */
+async function rpcReply(res) {
+	const text = await res.text()
+	if (!res.ok) throw new Error(`MCP HTTP ${res.status}: ${text}`)
+	const data = (res.headers.get('content-type') ?? '').includes('text/event-stream')
+		? text
+				.split(/\r?\n/)
+				.filter((line) => line.startsWith('data:'))
+				.map((line) => line.slice(5).trimStart())[0]
+		: text
+	const reply = JSON.parse(data)
+	if (reply.error) throw new Error(`MCP error ${reply.error.code}: ${reply.error.message}`)
+	return reply.result
+}
+
+/**
+ * Seed skills through the real `skill_set` tool over MCP, so bodies land in R2
+ * and metadata in D1 exactly as in production. Each fixture skill is the tool's
+ * arguments ({ slug, body, metadata? }). `mcpUrl` is the eval worker's /mcp
+ * (auth is off there); `fetchFn` is swappable for tests.
+ */
+export async function seedSkills(skills, mcpUrl, fetchFn = fetch) {
+	const headers = {
+		'content-type': 'application/json',
+		accept: 'application/json, text/event-stream',
+	}
+	let id = 0
+	const post = (message) =>
+		fetchFn(mcpUrl, {
+			method: 'POST',
+			headers,
+			body: JSON.stringify({ jsonrpc: '2.0', ...message }),
+		})
+	const init = await post({
+		id: ++id,
+		method: 'initialize',
+		params: {
+			protocolVersion: '2025-03-26',
+			capabilities: {},
+			clientInfo: { name: 'fermi-eval-seed', version: '0.0.0' },
+		},
+	})
+	await rpcReply(init)
+	headers['mcp-session-id'] = init.headers.get('mcp-session-id')
+	await (await post({ method: 'notifications/initialized' })).body?.cancel()
+	for (const skill of skills) {
+		const result = await rpcReply(
+			await post({
+				id: ++id,
+				method: 'tools/call',
+				params: { name: 'skill_set', arguments: skill },
+			}),
+		)
+		if (result.isError) {
+			throw new Error(`skill_set ${skill.slug}: ${JSON.stringify(result.content)}`)
+		}
+	}
 }
