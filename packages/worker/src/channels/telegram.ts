@@ -1,4 +1,5 @@
 import { isAllowed } from '../lib/allowlist-store.ts'
+import { apiBase } from '../lib/api-base.ts'
 import { logChannelMessage } from '../lib/conversation.ts'
 import { timingSafeEqual } from '../lib/crypto.ts'
 import { wakeMacDaemon } from '../lib/mac-wake.ts'
@@ -110,7 +111,7 @@ export async function setTelegramWebhook(
 		return { ok: false, error: 'TELEGRAM_WEBHOOK_SECRET is not configured' }
 	}
 
-	const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+	const res = await fetch(`${apiBase(env, 'TELEGRAM_API_BASE')}/bot${token}/setWebhook`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ url: webhookUrl, secret_token: env.TELEGRAM_WEBHOOK_SECRET }),
@@ -136,7 +137,7 @@ export async function sendTelegramMessage(env: Env, chatId: string, text: string
 
 	const chunks = chunkText(text, 4000)
 	for (const chunk of chunks) {
-		await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+		await fetch(`${apiBase(env, 'TELEGRAM_API_BASE')}/bot${token}/sendMessage`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ chat_id: chatId, text: chunk, parse_mode: 'Markdown' }),
