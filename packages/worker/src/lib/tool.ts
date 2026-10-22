@@ -77,6 +77,13 @@ export async function runWithGuardrails<R>(
 	const argsHash = await hashArgs(args)
 
 	if (agentState?.mode === 'plan' && def.mutates && !planModeExempt) {
+		await writeAudit(env.FERMI_DB, {
+			tool: def.name,
+			args_hash: argsHash,
+			outcome: 'denied',
+			risk: def.risk,
+			session_id: agentState.sessionId,
+		})
 		return {
 			kind: 'denied',
 			reason: 'plan_mode_restricted',
@@ -108,8 +115,13 @@ export async function runWithGuardrails<R>(
 			return { kind: 'pending_approval', token }
 		}
 
-		const stored = await env.FERMI_KV.get(`approval:${approvalToken}`)
-		if (!stored) {
+		// A token is bound to the exact tool and args it was minted for. `args` never
+		// carries approval_token (defineTool strips it), so the hashes are comparable.
+		const stored = await env.FERMI_KV.get<{ tool: string; args_hash: string }>(
+			`approval:${approvalToken}`,
+			'json',
+		)
+		if (!stored || stored.tool !== def.name || stored.args_hash !== argsHash) {
 			await writeAudit(env.FERMI_DB, {
 				tool: def.name,
 				args_hash: argsHash,
