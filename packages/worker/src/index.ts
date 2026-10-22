@@ -292,8 +292,16 @@ const defaultHandler = {
 				boxes: await listBoxes(env.FERMI_DB, { limit: 50 }),
 				// Per-route API health (#47): `unavailable` when the last N ended agents
 				// on a route all failed with the same harness api_error status.
+				// Alternate Claude accounts appear as `claude:<account>`.
 				routes: {
 					claude: routeHealth(agents, 'claude'),
+					...Object.fromEntries(
+						[
+							...new Set(
+								agents.flatMap((a) => (a.route === 'claude' && a.account ? [a.account] : [])),
+							),
+						].map((acct) => [`claude:${acct}`, routeHealth(agents, 'claude', acct)]),
+					),
 					codex: routeHealth(agents, 'codex'),
 					grok: routeHealth(agents, 'grok'),
 				},

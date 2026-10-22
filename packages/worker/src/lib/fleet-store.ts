@@ -36,6 +36,16 @@ export interface CloudAgentRow {
 	/** Liveness (#42): last `working:` progress note, and runner restarts seen. */
 	last_working_event_at: number | null
 	restart_count: number
+	/** Alternate Claude account (claude route only); null = default token. */
+	account: string | null
+}
+
+/** Alternate Claude account ids: lowercase, map 1:1 onto a secret name suffix. */
+export const CLAUDE_ACCOUNT_RE = /^[a-z][a-z0-9_]{0,31}$/
+
+/** Fermi secret holding the Claude Code OAuth token for an account (null = default). */
+export function claudeTokenSecretName(account: string | null): string {
+	return account ? `CLAUDE_CODE_OAUTH_TOKEN_${account.toUpperCase()}` : 'CLAUDE_CODE_OAUTH_TOKEN'
 }
 
 /** Agent record plus its box's heartbeat, so clients check liveness without parsing events (#42). */
@@ -193,13 +203,14 @@ export async function createCloudAgent(
 		budgetUsd?: number
 		ttlSeconds?: number
 		instanceType?: string
+		account?: string
 	},
 ): Promise<CloudAgentRow> {
 	const id = input.id ?? `ca_${crypto.randomUUID()}`
 	await db
 		.prepare(
-			`INSERT INTO cloud_agents (id, box_id, task_id, queue, route, prompt, proof_contract, budget_usd, ttl_seconds, created_at, instance_type)
-			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
+			`INSERT INTO cloud_agents (id, box_id, task_id, queue, route, prompt, proof_contract, budget_usd, ttl_seconds, created_at, instance_type, account)
+			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
 		)
 		.bind(
 			id,
@@ -213,6 +224,7 @@ export async function createCloudAgent(
 			input.ttlSeconds ?? null,
 			Date.now(),
 			input.instanceType ?? null,
+			input.account ?? null,
 		)
 		.run()
 	return (await getCloudAgent(db, id)) as CloudAgentRow
@@ -319,9 +331,14 @@ export interface RouteHealth {
  * ended agents on a route all died with the same `harness api_error <status>`
  * (spend cap, 429, auth), orchestrators should stop relaunching into it.
  */
-export function routeHealth(agents: CloudAgentRow[], route: CloudAgentRow['route']): RouteHealth {
+export function routeHealth(
+	agents: CloudAgentRow[],
+	route: CloudAgentRow['route'],
+	account: string | null = null,
+): RouteHealth {
+	// Each Claude account has its own spend cap, so health is per account.
 	const ended = agents
-		.filter((a) => a.route === route && a.ended_at != null)
+		.filter((a) => a.route === route && (a.account ?? null) === account && a.ended_at != null)
 		.sort((a, b) => (b.ended_at ?? 0) - (a.ended_at ?? 0))
 	let status: string | null = null
 	let count = 0
