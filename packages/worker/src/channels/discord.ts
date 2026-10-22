@@ -1,4 +1,5 @@
 import { isAllowed } from '../lib/allowlist-store.ts'
+import { apiBase } from '../lib/api-base.ts'
 import { logChannelMessage } from '../lib/conversation.ts'
 import { timingSafeEqual } from '../lib/crypto.ts'
 import { approvePairing } from '../lib/pairing.ts'
@@ -112,7 +113,7 @@ export async function sendDiscordMessage(env: Env, channelId: string, text: stri
 	if (!token) return
 
 	for (const chunk of chunkText(text, DISCORD_MAX_LENGTH)) {
-		const url = `https://discord.com/api/v10/channels/${channelId}/messages`
+		const url = `${apiBase(env, 'DISCORD_API_BASE')}/api/v10/channels/${channelId}/messages`
 		const init: RequestInit = {
 			method: 'POST',
 			headers: {
