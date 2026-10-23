@@ -113,6 +113,15 @@ wrangler deploy --var FERMI_AUTH_ENABLED:true
 > `workers.dev` URL — anyone who finds it can read your memories, resolve your
 > stored secrets, and run code. Open mode is for `wrangler dev` only.
 
+**Deploying from GitHub Actions.** `.github/workflows/deploy.yml` deploys `master` after CI
+passes. It renders `wrangler.jsonc` with `scripts/render-wrangler.mjs` from the `production`
+environment (secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID`,
+`KV_FERMI_ID`, `KV_OAUTH_ID`; vars: `WORKER_NAME`, `D1_DATABASE_NAME`, `R2_BUCKET_NAME`,
+`VECTORIZE_INDEX_NAME`, `FERMI_PUBLIC_URL`), applies D1 migrations, deploys with
+`FERMI_AUTH_ENABLED:true`, then smoke-tests `/health`, `/mcp` and the OAuth host. Without
+`CLOUDFLARE_API_TOKEN` the deploy job is skipped. Check your values locally with
+`node scripts/render-wrangler.mjs --check`.
+
 Then seed the bundled skills and confirm the capability registry:
 
 ```bash
