@@ -88,12 +88,12 @@ describe('sendChannelMessage', () => {
 	})
 
 	it('routes wa to the outbox without any fetch', async () => {
-		await sendChannelMessage(workerEnv, 'wa', '15551234567', 'hi there')
+		await sendChannelMessage(workerEnv, 'wa', '15555550100', 'hi there')
 		expect(sent).toHaveLength(0)
 		const row = await env.FERMI_DB.prepare(
 			"SELECT chat_id, body, status FROM outbox WHERE channel = 'wa'",
 		).first<{ chat_id: string; body: string; status: string }>()
-		expect(row).toMatchObject({ chat_id: '15551234567', body: 'hi there', status: 'pending' })
+		expect(row).toMatchObject({ chat_id: '15555550100', body: 'hi there', status: 'pending' })
 	})
 
 	it('routes tg through the Telegram sendMessage API', async () => {
