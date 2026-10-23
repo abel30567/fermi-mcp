@@ -37,7 +37,7 @@ export function registerPhoneTools(agent: FermiMCP) {
 		description:
 			'Place an outbound phone call from the configured Twilio caller ID and let the GPT-Live voice model pursue a goal (e.g. "call the IRS, wait on hold, request a first-time penalty abatement for tax year 2024"). Navigates phone menus, pauses the voice model while on hold, and hangs up when done. Returns immediately with a call_id; the call can run for a long time. Poll phone_call_status, or pass notify_channel/notify_chat_id to have the outcome enqueued as a task for that chat when the call ends. Requires the phone config secrets (see error if missing).',
 		schema: {
-			to: z.string().regex(E164).describe('Number to call, E.164 (e.g. +18008291040)'),
+			to: z.string().regex(E164).describe('Number to call, E.164 (e.g. +15555550100)'),
 			goal: z.string().min(5).max(4000).describe('What the call should achieve, in plain language'),
 			context: z
 				.string()

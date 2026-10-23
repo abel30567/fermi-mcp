@@ -155,8 +155,14 @@ bun run dev            # wrangler dev --local
 bun run check          # Biome lint + format check
 bun run format         # auto-format
 bun run migrate:local  # apply D1 migrations locally
-bun run test           # vitest (worker package): unit + MCP contract projects
+bun run test           # private scan, script tests, vitest (worker): unit + MCP contract
 ```
+
+`bun run test` starts with `scripts/private-scan.mjs`, which fails on any git-tracked
+E.164 or formatted phone number, WhatsApp JID or LID, or phone-looking `chat_id`/`sender`
+that is not a placeholder (`5555550xxx`, `1555555xxxx`, `10000000000000`, `20000000000000`). It also
+applies one regex per line from the untracked `~/.config/fermi/private-patterns` (or
+`$FERMI_PRIVATE_PATTERNS`) when that file exists, and names only file, line and kind.
 
 ### Running the eval target
 

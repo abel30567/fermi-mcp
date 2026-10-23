@@ -35,4 +35,11 @@ describe('migrations', () => {
 		).run()
 		expect(await ftsIds('quasar')).toEqual([2])
 	})
+
+	it('seeds no allowlist rows', async () => {
+		const row = await env.FERMI_DB.prepare('SELECT COUNT(*) AS n FROM allowlist').first<{
+			n: number
+		}>()
+		expect(row?.n).toBe(0)
+	})
 })
