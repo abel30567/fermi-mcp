@@ -2,9 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main, master, 'feat/**']
+    branches: [master]
   pull_request:
-    branches: [main, master]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -14,29 +13,17 @@ jobs:
   check:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ github.head_ref || github.ref_name }}
+          persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: 1.4.2
 
-      - run: bun install
-
-      - name: Auto-fix lint and format
-        run: bunx biome check --fix --unsafe .
-
-      - name: Commit fixes if any
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet || git commit -m "chore: auto-fix biome lint and format"
-          git pull --rebase || true
-          git push || true
+      - run: bun install --frozen-lockfile
 
       - name: Lint and format check
         run: bun run check
@@ -46,3 +33,6 @@ jobs:
 
       - name: Typecheck shared
         run: npx tsc --noEmit -p packages/shared/tsconfig.json
+
+      - name: Test
+        run: bun run test
