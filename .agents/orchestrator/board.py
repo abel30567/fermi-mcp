@@ -3,7 +3,7 @@
 #   setup : create a GitHub Project (user-owned, BOARD_OWNER, default @me) with the Status options
 #   sync  : set each issue's Status on that Project. setup/sync need a gh token with the `project` scope.
 # Tracked issues = label `tracked` or `follow-up`. Nobody edits Status by hand; the only manual inputs are
-# the labels `status:ready` (Backlog -> Ready), `status:blocked` and `env:staging`.
+# the labels `status:ready` (Backlog -> Ready) and `status:blocked`. A merged PR closes its issue (Done).
 import datetime as dt, json, os, re, subprocess, sys
 from pathlib import Path
 
@@ -11,10 +11,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from conf import BOARD_TITLE, JIRA_URL, R, STATE, TITLE_RE, TRACKED_LABELS, first_line  # noqa: E402
 
 OWNER = os.environ.get("BOARD_OWNER", "@me")
-STATUSES = ["Backlog", "Ready", "In Progress", "In Review", "Changes Requested", "Verified",
-            "Merged", "On Staging", "Released", "Done", "Blocked"]
+STATUSES = ["Backlog", "Ready", "In Progress", "In Review", "Changes Requested", "Verified", "Done", "Blocked"]
 ICON = {"Backlog": "⚪", "Ready": "🔵", "In Progress": "🟡", "In Review": "🟣", "Changes Requested": "🟠",
-        "Verified": "🟢", "Merged": "✅", "On Staging": "🧪", "Released": "🚀", "Done": "☑️", "Blocked": "⛔"}
+        "Verified": "🟢", "Done": "✅", "Blocked": "⛔"}
+COLORS = ["GRAY", "BLUE", "YELLOW", "PURPLE", "ORANGE", "GREEN", "GREEN", "RED"]
 APPLY = "--apply" in sys.argv
 GIST_ID = STATE / "board-gist-id"   # local only; the gist is secret (unlisted)
 
@@ -29,12 +29,10 @@ def gh(*a):
 def derive(issue, prs, live_keys):
     """Status for one issue from its linked PRs (latest first-line markers) and labels."""
     labels = {l["name"] for l in issue["labels"]}
-    if issue["state"] == "CLOSED":  # closed after release = Released; closed with no shipped PR = Done
-        return "Released" if any(p["state"] == "MERGED" for p in prs) else "Done"
+    if issue["state"] == "CLOSED":  # there is no staging: closed means done
+        return "Done"
     if "status:blocked" in labels:
         return "Blocked"
-    if "env:staging" in labels:
-        return "On Staging"
     open_prs = [p for p in prs if p["state"] == "OPEN"]
     if open_prs:
         cs = sorted((c for p in open_prs for c in p["comments"]), key=lambda c: c["createdAt"])
@@ -50,7 +48,7 @@ def derive(issue, prs, live_keys):
             return "Verified"
         return "In Review" if tb else "In Progress"
     if any(p["state"] == "MERGED" for p in prs):
-        return "Merged"
+        return "Done"  # merged = complete; sync --apply closes the issue
     m = TITLE_RE.match(issue["title"])
     if m and m.group(1) in live_keys:
         return "In Progress"
@@ -136,14 +134,17 @@ def setup():
         print(f"would create project '{BOARD_TITLE}' for {OWNER} (needs `gh auth refresh -s project`)"); return
     p = json.loads(gh("project", "create", "--owner", OWNER, "--title", BOARD_TITLE, "--format", "json"))
     num, st = p["number"], fields(p["number"])["Status"]["id"]
-    opts = ",".join('{name:%s,color:%s,description:""}' % (json.dumps(s), c) for s, c in zip(
-        STATUSES, ["GRAY", "BLUE", "YELLOW", "PURPLE", "ORANGE", "GREEN", "GREEN", "PINK", "GRAY", "GRAY", "RED"]))
-    gh("api", "graphql", "-f", "query=mutation{updateProjectV2Field(input:{fieldId:\"%s\",singleSelectOptions:[%s]})"
-       "{projectV2Field{... on ProjectV2SingleSelectField{id}}}}" % (st, opts))
+    set_status_options(st)
     gh("project", "field-create", str(num), "--owner", OWNER, "--name", "Key", "--data-type", "TEXT")
     gh("project", "field-create", str(num), "--owner", OWNER, "--name", "Fix rounds", "--data-type", "NUMBER")
     gh("project", "link", str(num), "--owner", OWNER, "--repo", R)
     print(f"created: #{num} {p['url']}")
+
+
+def set_status_options(field_id):
+    opts = ",".join('{name:%s,color:%s,description:""}' % (json.dumps(s), c) for s, c in zip(STATUSES, COLORS))
+    gh("api", "graphql", "-f", "query=mutation{updateProjectV2Field(input:{fieldId:\"%s\",singleSelectOptions:[%s]})"
+       "{projectV2Field{... on ProjectV2SingleSelectField{id}}}}" % (field_id, opts))
 
 
 def sync():
@@ -152,6 +153,8 @@ def sync():
         sys.exit("no project; run: orch board setup --apply")
     num, pid = p["number"], p["id"]
     fs = fields(num); st = fs["Status"]
+    if APPLY and [o["name"] for o in st["options"]] != STATUSES:  # reconcile the column set (e.g. after removing staging)
+        set_status_options(st["id"]); fs = fields(num); st = fs["Status"]
     opt = {o["name"]: o["id"] for o in st["options"]}
     items = {}
     for it in json.loads(gh("project", "item-list", str(num), "--owner", OWNER, "--format", "json", "--limit", "500"))["items"]:
@@ -163,6 +166,10 @@ def sync():
         print(f"#{i['number']:<4} {key:12} {status:18} {'(was ' + cur + ')' if cur and cur != status else ''} PRs={[p['number'] for p in linked]}")
         if not APPLY:
             continue
+        merged = [p for p in linked if p["state"] == "MERGED"]
+        if i["state"] == "OPEN" and status == "Done" and merged:
+            gh("issue", "close", str(i["number"]), "-R", R, "--comment",
+               f"[ORCHESTRATOR] Done: merged in PR #{merged[-1]['number']}.")
         if not item:
             item = json.loads(gh("project", "item-add", str(num), "--owner", OWNER, "--url", i["url"], "--format", "json"))
         edit = lambda *a: gh("project", "item-edit", "--id", item["id"], "--project-id", pid, *a)

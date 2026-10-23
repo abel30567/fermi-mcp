@@ -15,7 +15,6 @@ follow-up|BFD4F2|Non-blocking follow-up from a review
 status:ready|1D76DB|Triaged; ready for a builder
 status:blocked|B60205|Blocked; needs a human
 merge:hold|FBCA04|Merge gate must skip this PR
-env:staging|F9D0C4|Shipped to staging
 L
             ;;
   baseline) exec "$D/baseline.sh" ;;
