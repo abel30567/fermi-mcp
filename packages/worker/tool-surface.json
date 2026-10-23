@@ -2800,7 +2800,7 @@
 				"to": {
 					"type": "string",
 					"pattern": "^\\+[1-9]\\d{6,14}$",
-					"description": "Number to call, E.164 (e.g. +18008291040)"
+					"description": "Number to call, E.164 (e.g. +15555550100)"
 				},
 				"goal": {
 					"type": "string",

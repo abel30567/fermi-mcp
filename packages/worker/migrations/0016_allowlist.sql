@@ -9,12 +9,11 @@ CREATE TABLE IF NOT EXISTS allowlist (
   PRIMARY KEY (channel, sender_id)
 );
 
--- Seed the existing allowlisted senders (owner + guest) so the KV → D1 cutover
--- doesn't lock anyone out.
-INSERT OR IGNORE INTO allowlist (channel, sender_id, note, added_at, added_by) VALUES
-  ('tg', '7254471750', 'owner', 1783200000000, 'migration'),
-  ('wa', '15555550101', 'owner', 1783200000000, 'migration'),
-  ('wa', '15555550102', 'guest', 1783200000000, 'migration');
+-- No seed rows: this repo is public, so the owner's personal sender ids are not
+-- committed here. They were removed after this migration had been applied in
+-- production; D1 tracks applied migrations by filename, so live rows are untouched.
+-- Add senders at runtime with the allowlist_add MCP tool, e.g.
+--   allowlist_add { channel: 'wa', sender_id: '15555550100', note: 'owner' }
 
 -- Usage stats join tasks by (channel, sender).
 CREATE INDEX IF NOT EXISTS tasks_channel_sender ON tasks(channel, sender);

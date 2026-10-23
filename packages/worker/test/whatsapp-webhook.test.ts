@@ -77,7 +77,7 @@ describe('handleWhatsAppWebhook', () => {
 	it('queues a pairing code for an unknown sender without enqueueing', async () => {
 		const res = await handleWhatsAppWebhook(
 			webhookRequest(
-				{ sender: '15551234567', chat_id: '15551234567', text: 'hello' },
+				{ sender: '15555550100', chat_id: '15555550100', text: 'hello' },
 				'test-wa-secret',
 			),
 			workerEnv,
@@ -86,13 +86,13 @@ describe('handleWhatsAppWebhook', () => {
 
 		const outbox = await pendingOutbox()
 		expect(outbox).toHaveLength(1)
-		expect(outbox[0].chat_id).toBe('15551234567')
+		expect(outbox[0].chat_id).toBe('15555550100')
 		expect(outbox[0].body).toContain('Pairing code:')
 
 		const code = /Pairing code: (\w+)/.exec(outbox[0].body)?.[1]
 		expect(code).toBeTruthy()
 		const record = await env.FERMI_KV.get(`pairing:${code}`)
-		expect(JSON.parse(record ?? '{}')).toMatchObject({ channel: 'wa', senderId: '15551234567' })
+		expect(JSON.parse(record ?? '{}')).toMatchObject({ channel: 'wa', senderId: '15555550100' })
 
 		expect(await listTasks(env.FERMI_DB)).toHaveLength(0)
 		const logged = await env.FERMI_DB.prepare('SELECT COUNT(*) AS n FROM messages').first<{
@@ -102,10 +102,10 @@ describe('handleWhatsAppWebhook', () => {
 	})
 
 	it('enqueues a task, acks, and logs for an allowlisted sender', async () => {
-		await addToAllowlist(env.FERMI_DB, { channel: 'wa', senderId: '15551234567' })
+		await addToAllowlist(env.FERMI_DB, { channel: 'wa', senderId: '15555550100' })
 		const res = await handleWhatsAppWebhook(
 			webhookRequest(
-				{ sender: '15551234567', chat_id: '15559990000', text: 'what is on my calendar?' },
+				{ sender: '15555550100', chat_id: '15555550199', text: 'what is on my calendar?' },
 				'test-wa-secret',
 			),
 			workerEnv,
@@ -116,8 +116,8 @@ describe('handleWhatsAppWebhook', () => {
 		expect(tasks).toHaveLength(1)
 		expect(tasks[0]).toMatchObject({
 			channel: 'wa',
-			sender: '15551234567',
-			chat_id: '15559990000',
+			sender: '15555550100',
+			chat_id: '15555550199',
 			payload: 'what is on my calendar?',
 		})
 
@@ -126,20 +126,20 @@ describe('handleWhatsAppWebhook', () => {
 		expect(outbox[0].body).toContain('Got it')
 
 		const logged = await env.FERMI_DB.prepare(
-			"SELECT m.role, m.body FROM messages m JOIN sessions s ON m.session_id = s.id WHERE s.host = 'wa:15559990000'",
+			"SELECT m.role, m.body FROM messages m JOIN sessions s ON m.session_id = s.id WHERE s.host = 'wa:15555550199'",
 		).all<{ role: string; body: string }>()
 		expect(logged.results).toEqual([{ role: 'user', body: 'what is on my calendar?' }])
 	})
 
 	it('approves a pairing code via /approve from an allowlisted sender', async () => {
-		await addToAllowlist(env.FERMI_DB, { channel: 'wa', senderId: '15551234567' })
+		await addToAllowlist(env.FERMI_DB, { channel: 'wa', senderId: '15555550100' })
 		await env.FERMI_KV.put(
 			'pairing:CODE1234',
 			JSON.stringify({ channel: 'wa', senderId: '15557778888', chatId: '15557778888' }),
 		)
 		const res = await handleWhatsAppWebhook(
 			webhookRequest(
-				{ sender: '15551234567', chat_id: '15559990000', text: '/approve CODE1234' },
+				{ sender: '15555550100', chat_id: '15555550199', text: '/approve CODE1234' },
 				'test-wa-secret',
 			),
 			workerEnv,
@@ -149,15 +149,15 @@ describe('handleWhatsAppWebhook', () => {
 		expect(await env.FERMI_KV.get('pairing:CODE1234')).toBeNull()
 		const outbox = await pendingOutbox()
 		expect(outbox).toHaveLength(2)
-		expect(outbox.map((m) => m.chat_id).sort()).toEqual(['15557778888', '15559990000'])
+		expect(outbox.map((m) => m.chat_id).sort()).toEqual(['15555550199', '15557778888'])
 		expect(await listTasks(env.FERMI_DB)).toHaveLength(0)
 	})
 
 	it('reports an invalid /approve code without changing the allowlist', async () => {
-		await addToAllowlist(env.FERMI_DB, { channel: 'wa', senderId: '15551234567' })
+		await addToAllowlist(env.FERMI_DB, { channel: 'wa', senderId: '15555550100' })
 		await handleWhatsAppWebhook(
 			webhookRequest(
-				{ sender: '15551234567', chat_id: '15559990000', text: '/approve NOPE0000' },
+				{ sender: '15555550100', chat_id: '15555550199', text: '/approve NOPE0000' },
 				'test-wa-secret',
 			),
 			workerEnv,
@@ -168,10 +168,10 @@ describe('handleWhatsAppWebhook', () => {
 	})
 
 	it('enqueues an attributed group task without acking for an allowlisted sender', async () => {
-		await addToAllowlist(env.FERMI_DB, { channel: 'wa', senderId: '15551234567' })
+		await addToAllowlist(env.FERMI_DB, { channel: 'wa', senderId: '15555550100' })
 		const res = await handleWhatsAppWebhook(
 			webhookRequest(
-				{ sender: '15551234567', chat_id: '123-456@g.us', text: 'hello group' },
+				{ sender: '15555550100', chat_id: '123-456@g.us', text: 'hello group' },
 				'test-wa-secret',
 			),
 			workerEnv,
@@ -182,9 +182,9 @@ describe('handleWhatsAppWebhook', () => {
 		expect(tasks).toHaveLength(1)
 		expect(tasks[0]).toMatchObject({
 			channel: 'wa',
-			sender: '15551234567',
+			sender: '15555550100',
 			chat_id: '123-456@g.us',
-			payload: '[15551234567] hello group',
+			payload: '[15555550100] hello group',
 		})
 		// No ack in groups
 		expect(await pendingOutbox()).toHaveLength(0)
@@ -192,13 +192,13 @@ describe('handleWhatsAppWebhook', () => {
 		const logged = await env.FERMI_DB.prepare(
 			"SELECT m.body FROM messages m JOIN sessions s ON m.session_id = s.id WHERE s.host = 'wa:123-456@g.us'",
 		).all<{ body: string }>()
-		expect(logged.results).toEqual([{ body: '[15551234567] hello group' }])
+		expect(logged.results).toEqual([{ body: '[15555550100] hello group' }])
 	})
 
 	it('ignores an unknown sender in a group (no pairing, no task)', async () => {
 		const res = await handleWhatsAppWebhook(
 			webhookRequest(
-				{ sender: '19998887777', chat_id: '123-456@g.us', text: 'hi' },
+				{ sender: '15555550142', chat_id: '123-456@g.us', text: 'hi' },
 				'test-wa-secret',
 			),
 			workerEnv,
@@ -211,14 +211,14 @@ describe('handleWhatsAppWebhook', () => {
 	})
 
 	it('treats /approve in a group as an ordinary message', async () => {
-		await addToAllowlist(env.FERMI_DB, { channel: 'wa', senderId: '15551234567' })
+		await addToAllowlist(env.FERMI_DB, { channel: 'wa', senderId: '15555550100' })
 		await env.FERMI_KV.put(
 			'pairing:GRPCODE1',
 			JSON.stringify({ channel: 'wa', senderId: '15557778888', chatId: '15557778888' }),
 		)
 		const res = await handleWhatsAppWebhook(
 			webhookRequest(
-				{ sender: '15551234567', chat_id: '123-456@g.us', text: '/approve GRPCODE1' },
+				{ sender: '15555550100', chat_id: '123-456@g.us', text: '/approve GRPCODE1' },
 				'test-wa-secret',
 			),
 			workerEnv,
