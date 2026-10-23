@@ -122,6 +122,15 @@ environment (secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `D1_DATAB
 `CLOUDFLARE_API_TOKEN` the deploy job is skipped. Check your values locally with
 `node scripts/render-wrangler.mjs --check`.
 
+**Agent evals on worker PRs.** `.github/workflows/evals.yml` runs fermi-daemon's PR smoke
+(`abel30567/fermi-daemon@main`, `scripts/evals-ci.sh` with `evals/smoke.json`, k=3, the baseline
+harness) against the PR's head as the eval worker. It runs on `ready_for_review` and every later
+push of a non-draft, same-repo PR that touches `packages/worker/src/**` or
+`packages/worker/seeds/**`; a newer push cancels the older run. It posts the summary and a
+per-scenario pass table (`scripts/evals-scenarios.mjs`; never transcripts) as a PR comment and sets
+the commit status `evals/smoke`. The token is the `evals` environment's `CLAUDE_CODE_OAUTH_TOKEN`
+secret, passed on a file descriptor as in fermi-daemon; without it the run is skipped.
+
 Then seed the bundled skills and confirm the capability registry:
 
 ```bash
