@@ -24,7 +24,7 @@ P=$(gh api "repos/$GH_REPO/branches/$BASE/protection" 2>&1)
 if grep -q '"required_pull_request_reviews"\|"required_status_checks"' <<<"$P"; then pass "$BASE is branch-protected"
 else note "$BASE has no branch protection (or you cannot see it). Recommended: docs/4-customizing.md#branch-protection"; fi
 LABELS=$(gh label list -R "$GH_REPO" --limit 500 --json name --jq '.[].name' 2>/dev/null)
-missing=$(for l in tracked follow-up status:ready status:blocked merge:hold env:staging; do grep -qx "$l" <<<"$LABELS" || echo -n "$l "; done)
+missing=$(for l in tracked follow-up status:ready status:blocked merge:hold; do grep -qx "$l" <<<"$LABELS" || echo -n "$l "; done)
 [ -z "$missing" ] && pass "board labels exist" || note "missing labels: $missing(run: orch labels)"
 gh gist list --limit 1 >/dev/null 2>&1 && pass "token can use gists (board)" || note "token cannot list gists; orch board --apply will fail"
 
