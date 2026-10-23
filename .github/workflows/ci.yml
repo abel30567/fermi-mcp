@@ -4,9 +4,13 @@ on:
   push:
     branches: [master]
   pull_request:
+  # deploy.yml runs CI first and deploys only if it passes.
+  workflow_call:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # github.workflow is the caller's name under workflow_call, so the Deploy copy of CI never
+  # cancels (or is cancelled by) the push-triggered one.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -23,6 +27,11 @@ jobs:
         with:
           bun-version: 1.4.2
 
+      # wrangler 4 needs Node >= 22; the runner image ships 20.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
       - run: bun install --frozen-lockfile
 
       - name: Lint and format check
@@ -36,3 +45,21 @@ jobs:
 
       - name: Test
         run: bun run test
+
+      # Renders wrangler.jsonc from the template with fake values and bundles the worker exactly as
+      # a production deploy would, without touching Cloudflare.
+      - name: Deploy dry run
+        env:
+          CLOUDFLARE_ACCOUNT_ID: fake-account-id
+          WORKER_NAME: fermi-ci
+          D1_DATABASE_NAME: fermi-ci
+          D1_DATABASE_ID: fake-d1-id
+          R2_BUCKET_NAME: fermi-ci-storage
+          KV_FERMI_ID: fake-kv-fermi-id
+          KV_OAUTH_ID: fake-kv-oauth-id
+          VECTORIZE_INDEX_NAME: fermi-ci-capabilities
+          FERMI_PUBLIC_URL: https://fermi.example.workers.dev
+        run: |
+          node scripts/render-wrangler.mjs
+          cd packages/worker
+          bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/dry-run"
