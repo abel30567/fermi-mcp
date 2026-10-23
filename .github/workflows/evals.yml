@@ -1,0 +1,210 @@
+name: Evals
+
+# The fermi-daemon PR smoke (its DMN-16 evals workflow, evals/README.md "CI") against this PR's
+# worker: worker changes (tool names, descriptions, approval flows) can break agent behaviour even
+# when unit tests pass. Checks out abel30567/fermi-daemon@main (public, no token), pinned to one
+# commit for all three jobs, and runs its scripts/evals-ci.sh with the base scenarios of
+# evals/smoke.json (--no-variants), k=3, the baseline of evals/matrix.json, with this PR's head as
+# --worker. Three jobs: plan → run (holds the token) → report (PR comment + commit status
+# evals/smoke, no secrets).
+# - Only on non-draft PR heads (ready_for_review, then each push) that touch the worker's src or
+#   seeds; a newer push cancels the older run.
+# - Fork PRs never get the jobs (skipped, not failed). Without the evals environment's
+#   CLAUDE_CODE_OAUTH_TOKEN secret, plan ends with a notice and run and report are skipped.
+on:
+  pull_request:
+    types: [ready_for_review, synchronize]
+    paths:
+      - 'packages/worker/src/**'
+      - 'packages/worker/seeds/**'
+
+# One run per PR: the final commit's run is the one that counts.
+concurrency:
+  group: evals-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+  DAEMON_REPO: abel30567/fermi-daemon
+
+jobs:
+  plan:
+    if: github.event.pull_request.head.repo.full_name == github.repository && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    environment: evals
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      statuses: write # the evals/smoke commit status
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    outputs:
+      ok: ${{ steps.token.outputs.ok }}
+      daemon: ${{ steps.plan.outputs.daemon }}
+      entry: ${{ steps.plan.outputs.entry }}
+      scenarios: ${{ steps.plan.outputs.scenarios }}
+    steps:
+      - id: token
+        env:
+          HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+        run: |
+          echo "ok=$HAS_TOKEN" >> "$GITHUB_OUTPUT"
+          [ "$HAS_TOKEN" = true ] || echo "::notice::Evals skipped: the evals environment has no CLAUDE_CODE_OAUTH_TOKEN secret"
+      - if: steps.token.outputs.ok == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.DAEMON_REPO }}
+          ref: main
+          persist-credentials: false
+      - id: plan
+        if: steps.token.outputs.ok == 'true'
+        run: |
+          {
+            echo "daemon=$(git rev-parse HEAD)"
+            echo "entry=$(jq -c '.baseline' evals/matrix.json)"
+            echo "scenarios=$(jq -r '.scenarios | join(" ")' evals/smoke.json)"
+          } >> "$GITHUB_OUTPUT"
+      - if: steps.token.outputs.ok == 'true'
+        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state=pending -f context=evals/smoke -f description=running -f target_url="$RUN_URL" > /dev/null
+
+  run:
+    needs: plan
+    if: needs.plan.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    environment: evals
+    timeout-minutes: 240
+    env:
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'
+      CLAUDE_CODE_VERSION: 2.1.308
+    steps:
+      # bwrap is the eval sandbox's Linux backend (fermi-daemon harness/sandbox.mjs); it needs
+      # unprivileged user namespaces.
+      - run: |
+          sudo apt-get update -q && sudo apt-get install -y -q bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.DAEMON_REPO }}
+          ref: ${{ needs.plan.outputs.daemon }}
+          persist-credentials: false
+      # The worker under test: this PR's head.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          path: fermi-mcp
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - run: |
+          (cd fermi-mcp && bun install --frozen-lockfile)
+          npm install --prefix "$RUNNER_TEMP/claude-code" --no-audit --no-fund "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
+          echo "CLAUDE_BIN=$RUNNER_TEMP/claude-code/node_modules/.bin/claude" >> "$GITHUB_ENV"
+
+      # The one step that sees the secret, as in fermi-daemon's evals workflow. A secrets.* value
+      # can only reach a step through env: or with:, so this env var is the accepted bridge: its
+      # first line puts the token on a pipe (fd 3) and its second unsets it, before anything is
+      # started; it is never exported to a child process. scripts/evals-ci.sh hands it on to
+      # run.mjs and scan-secrets.mjs on fresh pipes.
+      - id: run
+        env:
+          EVAL_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ENTRY: ${{ needs.plan.outputs.entry }}
+          SCENARIOS: ${{ needs.plan.outputs.scenarios }}
+        run: |
+          exec 3< <(printf '%s' "$EVAL_TOKEN")
+          unset EVAL_TOKEN
+          read -ra scenarios <<<"$SCENARIOS"
+          CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR=3 bash scripts/evals-ci.sh run --entry "$ENTRY" --cell smoke -k 3 \
+            --out "$RUNNER_TEMP/evals" --artifacts "$RUNNER_TEMP/evals-cell" --worker "$GITHUB_WORKSPACE/fermi-mcp" --no-variants --scenarios "${scenarios[@]}"
+          name=$(jq -r '"\(.harness)-\(.model // "default")"' <<<"$ENTRY")
+          echo "outcome=$(cat "$RUNNER_TEMP/evals-cell/$name/smoke/outcome")" >> "$GITHUB_OUTPUT"
+
+      # For the report job only (1 day): results.json, summary.json and outcome, already scanned;
+      # never the attempt dirs (transcripts).
+      - if: steps.run.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: evals-cell
+          path: ${{ runner.temp }}/evals-cell
+          if-no-files-found: error
+          retention-days: 1
+      - if: steps.run.outputs.outcome == 'failure'
+        run: |
+          echo "::error::Evals failed: see the report job"
+          exit 1
+
+  report:
+    needs: [plan, run]
+    if: ${{ !cancelled() && needs.plan.outputs.ok == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: write # the evals/smoke commit status
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.DAEMON_REPO }}
+          ref: ${{ needs.plan.outputs.daemon }}
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          path: fermi-mcp
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # A cell that failed its scan uploaded nothing; the report counts it as missing.
+      - continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: evals-cell
+          path: ${{ runner.temp }}/evals-cells
+      # The comment: fermi-daemon's summary table and compare.md, then one pass table per scenario
+      # from the scanned summary.json (never results.json or transcripts), scanned again.
+      - id: report
+        env:
+          ENTRY: ${{ needs.plan.outputs.entry }}
+        run: |
+          bash scripts/evals-ci.sh report --entries "[$ENTRY]" --cells smoke --in "$RUNNER_TEMP/evals-cells" \
+            --out "$RUNNER_TEMP/evals" --artifacts "$RUNNER_TEMP/evals-artifacts" --title "Evals smoke (${HEAD_SHA:0:7})"
+          mapfile -t summaries < <(find "$RUNNER_TEMP/evals-artifacts" -name summary.json | sort)
+          if [ ${#summaries[@]} -gt 0 ]; then
+            node fermi-mcp/scripts/evals-scenarios.mjs "${summaries[@]}" >> "$RUNNER_TEMP/evals/comment.md"
+          fi
+          node scripts/scan-secrets.mjs "$RUNNER_TEMP/evals/comment.md"
+          echo "outcome=$(cat "$RUNNER_TEMP/evals/outcome")" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/evals/comment.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # Only compare.md and summary.json, already scanned: never results.json or transcripts.
+      - if: steps.report.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: evals-${{ github.run_id }}
+          path: ${{ runner.temp }}/evals-artifacts
+          if-no-files-found: error
+          retention-days: 30
+      - if: steps.report.outcome == 'success'
+        run: gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/evals/comment.md"
+      - if: "!cancelled()"
+        env:
+          OUTCOME: ${{ steps.report.outputs.outcome || 'failure' }}
+        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state="$OUTCOME" -f context=evals/smoke -f description="evals $OUTCOME" -f target_url="$RUN_URL" > /dev/null
+      - if: steps.report.outputs.outcome == 'failure'
+        run: |
+          echo "::error::Evals failed: see the report in the job summary"
+          exit 1
