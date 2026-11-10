@@ -1,5 +1,7 @@
-import { env } from 'cloudflare:test'
+import { SELF, env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
+import { sha256Hex } from '../../src/channels/box-gateway.ts'
+import { registerBox, updateBox } from '../../src/lib/fleet-store.ts'
 import { describeTool } from './describe-tool.ts'
 import { McpClient, type ToolResult, resultJson } from './mcp-client.ts'
 
@@ -146,6 +148,127 @@ describeTool('secret_resolve', () => {
 		expect(
 			resultJson(await other.callTool('secret_resolve', { name, purpose: 'other session' })),
 		).toMatchObject({ value: 'rate-value-123' })
+	})
+})
+
+/** Registers a box and opens an MCP session as it over /box/mcp. */
+async function boxSession(meta: Record<string, unknown> = {}) {
+	const boxId = unique('box')
+	await registerBox(env.FERMI_DB, {
+		boxId,
+		meta: { token_hash: await sha256Hex('box-secret'), ...meta },
+	})
+	const client = new McpClient('/box/mcp', { authorization: `Bearer ${boxId}.box-secret` })
+	await client.initialize()
+	return { boxId, client }
+}
+
+async function grantSecret(name: string, to: { boxId?: string; agentId?: string }) {
+	await env.FERMI_DB.prepare(
+		"INSERT INTO secret_grants (secret_name, scope, box_id, agent_id, created_at) VALUES (?1, 'app', ?2, ?3, 0)",
+	)
+		.bind(name, to.boxId ?? null, to.agentId ?? null)
+		.run()
+}
+
+async function storeResolvable(name: string, value: string) {
+	await approved(await session(), 'secret_set', {
+		name,
+		value,
+		allowed_capabilities: ['secret_resolve'],
+	})
+}
+
+describe('tool secret_resolve: box and mission grants (MCP-28)', () => {
+	it('box A resolves its granted secret; box B asking the same name is denied', async () => {
+		const name = unique('BOX_GRANTED')
+		await storeResolvable(name, 'box-value-123')
+		const a = await boxSession()
+		const b = await boxSession()
+		await grantSecret(name, { boxId: a.boxId })
+
+		expect(
+			resultJson(await a.client.callTool('secret_resolve', { name, purpose: 'box a' })),
+		).toEqual({ name, value: 'box-value-123', scope: 'app' })
+		expect(
+			resultJson(await b.client.callTool('secret_resolve', { name, purpose: 'box b' })),
+		).toEqual({ error: 'not_granted', name })
+	})
+
+	it('no grant rows: a box is denied without learning whether the secret exists', async () => {
+		const name = unique('BOX_NOGRANT')
+		await storeResolvable(name, 'nogrant-value-123')
+		const { client } = await boxSession()
+		expect(resultJson(await client.callTool('secret_resolve', { name, purpose: 'x' }))).toEqual({
+			error: 'not_granted',
+			name,
+		})
+		const missing = unique('BOX_MISSING')
+		expect(
+			resultJson(await client.callTool('secret_resolve', { name: missing, purpose: 'x' })),
+		).toEqual({ error: 'not_granted', name: missing })
+	})
+
+	it('unauthenticated box requests are refused before any tool runs', async () => {
+		const { boxId } = await boxSession()
+		for (const headers of [{}, { authorization: `Bearer ${boxId}.wrong-secret` }]) {
+			const res = await SELF.fetch('http://fermi.test/box/mcp', {
+				method: 'POST',
+				headers: {
+					'content-type': 'application/json',
+					accept: 'application/json, text/event-stream',
+					...headers,
+				},
+				body: JSON.stringify({
+					jsonrpc: '2.0',
+					id: 1,
+					method: 'tools/call',
+					params: { name: 'secret_resolve', arguments: { name: 'X', purpose: 'x' } },
+				}),
+			})
+			expect(res.status).toBe(401)
+		}
+	})
+
+	it('mission grant follows the box mission mid-session', async () => {
+		const name = unique('BOX_MISSION')
+		await storeResolvable(name, 'mission-value-123')
+		const mission = unique('mission')
+		await grantSecret(name, { agentId: mission })
+		const { boxId, client } = await boxSession({ agent_id: mission })
+		expect(
+			resultJson(await client.callTool('secret_resolve', { name, purpose: 'm1' })),
+		).toMatchObject({ value: 'mission-value-123' })
+
+		await env.FERMI_DB.prepare('UPDATE boxes SET meta = ?1 WHERE box_id = ?2')
+			.bind(
+				JSON.stringify({ token_hash: await sha256Hex('box-secret'), agent_id: unique('m') }),
+				boxId,
+			)
+			.run()
+		expect(resultJson(await client.callTool('secret_resolve', { name, purpose: 'm2' }))).toEqual({
+			error: 'not_granted',
+			name,
+		})
+	})
+
+	it('destroyed box: the session is cut off', async () => {
+		const name = unique('BOX_DESTROYED')
+		await storeResolvable(name, 'destroyed-value-123')
+		const { boxId, client } = await boxSession()
+		await grantSecret(name, { boxId })
+		await updateBox(env.FERMI_DB, boxId, { status: 'destroyed', destroyedAt: Date.now() })
+		await expect(client.callTool('secret_resolve', { name, purpose: 'x' })).rejects.toThrow(
+			/HTTP 401/,
+		)
+	})
+
+	it('admin (owner) path is unaffected by grants', async () => {
+		const name = unique('OWNER_NOGRANT')
+		await storeResolvable(name, 'owner-value-123')
+		expect(
+			resultJson(await (await session()).callTool('secret_resolve', { name, purpose: 'owner' })),
+		).toEqual({ name, value: 'owner-value-123', scope: 'app' })
 	})
 })
 
