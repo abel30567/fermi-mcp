@@ -1,3 +1,5 @@
+import { hashArgs } from './audit.ts'
+import { timingSafeEqual } from './crypto.ts'
 import { type OauthClient, getOauthClient } from './oauth-store.ts'
 import { getSecret, putSecret } from './secrets-store.ts'
 
@@ -6,18 +8,36 @@ const STATE_KEY_PREFIX = 'oauth:state:'
 
 interface StateRecord {
 	client: string
+	owner: string
 	created_at: number
+}
+
+/**
+ * Principal id of the owner bearer: a fingerprint of FERMI_BEARER_TOKEN, so a state
+ * minted under a rotated (or any other) token no longer matches at callback time.
+ */
+async function principalOf(token: string): Promise<string> {
+	return `owner:${(await hashArgs(token)).slice(0, 16)}`
+}
+
+/** The owner principal for an `Authorization: Bearer FERMI_BEARER_TOKEN` request, else null. */
+async function authenticateOwner(request: Request, env: Env): Promise<string | null> {
+	const token = env.FERMI_BEARER_TOKEN
+	const auth = request.headers.get('authorization') ?? ''
+	if (!token || !timingSafeEqual(auth, `Bearer ${token}`)) return null
+	return principalOf(token)
 }
 
 export async function buildAuthUrl(
 	client: OauthClient,
 	baseUrl: string,
 	env: Env,
+	owner: string,
 ): Promise<string> {
 	const state = crypto.randomUUID()
 	await env.FERMI_KV.put(
 		`${STATE_KEY_PREFIX}${state}`,
-		JSON.stringify({ client: client.name, created_at: Date.now() } satisfies StateRecord),
+		JSON.stringify({ client: client.name, owner, created_at: Date.now() } satisfies StateRecord),
 		{ expirationTtl: STATE_TTL_SECONDS },
 	)
 	const params = new URLSearchParams({
@@ -34,11 +54,31 @@ export async function startFlow(
 	clientName: string,
 	baseUrl: string,
 	env: Env,
+	owner: string,
 ): Promise<{ url: string; state_ttl_seconds: number }> {
 	const client = await getOauthClient(clientName, env)
 	if (!client) throw new Error(`oauth_client_not_found: ${clientName}`)
-	const url = await buildAuthUrl(client, baseUrl, env)
+	const url = await buildAuthUrl(client, baseUrl, env, owner)
 	return { url, state_ttl_seconds: STATE_TTL_SECONDS }
+}
+
+/** `/oauth/start`: owner-bearer only; redirects to the provider with an owner-bound state. */
+export async function handleOauthStart(request: Request, env: Env): Promise<Response> {
+	const owner = await authenticateOwner(request, env)
+	if (!owner) return new Response('Unauthorized', { status: 401 })
+	const url = new URL(request.url)
+	const provider = url.searchParams.get('provider')
+	if (!provider) return new Response('Missing provider', { status: 400 })
+	const baseUrl = `${url.protocol}//${url.host}`
+	try {
+		const { url: authUrl } = await startFlow(provider, baseUrl, env, owner)
+		return Response.redirect(authUrl, 302)
+	} catch (err) {
+		return Response.json(
+			{ error: err instanceof Error ? err.message : 'oauth_start_failed' },
+			{ status: 400 },
+		)
+	}
 }
 
 export interface CallbackResult {
@@ -53,8 +93,24 @@ export async function handleCallback(url: URL, env: Env, baseUrl: string): Promi
 	if (!code || !state) throw new Error('missing_code_or_state')
 	const stateJson = await env.FERMI_KV.get(`${STATE_KEY_PREFIX}${state}`)
 	if (!stateJson) throw new Error('invalid_or_expired_state')
-	await env.FERMI_KV.delete(`${STATE_KEY_PREFIX}${state}`)
 	const stateRec = JSON.parse(stateJson) as StateRecord
+	const expiresAt = stateRec.created_at + STATE_TTL_SECONDS * 1000
+	const now = Date.now()
+	if (!(expiresAt > now)) throw new Error('invalid_or_expired_state')
+	const token = env.FERMI_BEARER_TOKEN
+	if (!token || stateRec.owner !== (await principalOf(token))) {
+		throw new Error('state_principal_mismatch')
+	}
+
+	// Claim the state before any side effect: only one callback can insert the row.
+	const [, claim] = await env.FERMI_DB.batch([
+		env.FERMI_DB.prepare('DELETE FROM oauth_state_claims WHERE expires_at <= ?').bind(now),
+		env.FERMI_DB.prepare(
+			'INSERT INTO oauth_state_claims (state, expires_at) VALUES (?, ?) ON CONFLICT(state) DO NOTHING RETURNING state',
+		).bind(state, expiresAt),
+	])
+	if (!claim?.results.length) throw new Error('state_already_used')
+	await env.FERMI_KV.delete(`${STATE_KEY_PREFIX}${state}`)
 
 	const client = await getOauthClient(stateRec.client, env)
 	if (!client) throw new Error(`oauth_client_not_found: ${stateRec.client}`)

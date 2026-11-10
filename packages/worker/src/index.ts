@@ -32,7 +32,7 @@ import { SandboxStorageDO } from './do/sandbox-storage.ts'
 import { handleAppsRequest } from './lib/apps-handler.ts'
 import { handleAppsLoginGet, handleAppsLoginPost, handleAppsLogout } from './lib/apps-login.ts'
 import { getCapabilityRegistry } from './lib/capability.ts'
-import { handleCallback, startFlow } from './lib/oauth-flow.ts'
+import { handleCallback, handleOauthStart } from './lib/oauth-flow.ts'
 import { handleAuthorizeGet, handleAuthorizePost } from './lib/oauth-handlers.ts'
 import { countPendingTasks } from './lib/task-store.ts'
 import { FermiMCP } from './mcp/index.ts'
@@ -77,20 +77,7 @@ const defaultHandler = {
 			return handleAuthorizePost(request, env)
 		}
 
-		if (url.pathname === '/oauth/start') {
-			const provider = url.searchParams.get('provider')
-			if (!provider) return new Response('Missing provider', { status: 400 })
-			const baseUrl = `${url.protocol}//${url.host}`
-			try {
-				const { url: authUrl } = await startFlow(provider, baseUrl, env)
-				return Response.redirect(authUrl, 302)
-			} catch (err) {
-				return Response.json(
-					{ error: err instanceof Error ? err.message : 'oauth_start_failed' },
-					{ status: 400 },
-				)
-			}
-		}
+		if (url.pathname === '/oauth/start') return handleOauthStart(request, env)
 
 		if (url.pathname === '/oauth/callback') {
 			const baseUrl = `${url.protocol}//${url.host}`
