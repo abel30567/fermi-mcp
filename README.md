@@ -168,7 +168,10 @@ applies one regex per line from the untracked `~/.config/fermi/private-patterns`
 ### Running the eval target
 
 `packages/worker/wrangler.eval.jsonc` runs the real worker fully locally for the live
-harness evals: no Cloudflare login, no remote ids, auth off. Outbound APIs are pointed
+harness evals: no Cloudflare login, no remote ids, and auth off via `"FERMI_LOCAL_DEV": "true"`
+in its `vars`. It is the only committed wrangler config allowed to set that bypass
+(`scripts/wrangler-configs.test.mjs` fails if any other, including `wrangler.template.jsonc`,
+does) and it is never deployed. Outbound APIs are pointed
 at local fakes with `SLACK_API_BASE`, `TELEGRAM_API_BASE`, `DISCORD_API_BASE`,
 `TWILIO_API_BASE` and `ANTHROPIC_API_BASE` (unset means the real service).
 `MACOS_MCP_URL` and any tokens come from the same env file.
@@ -196,7 +199,8 @@ replaces that chat's transcript with the same `sessions`/`messages` rows the cha
 gateways write, each turn dated `minutes_ago` before seed time, so `context_bootstrap`,
 `conversation_history` and `session_search` return it. With `sender`, user turns get
 the group attribution prefix (`[sender] text`). It writes each fixture skill (`{ slug, body, metadata? }`)
-by calling the real `skill_set` tool on the running worker's `/mcp` (auth is off there).
+by calling the real `skill_set` tool on the running worker's `/mcp`, which needs no OAuth
+because `wrangler.eval.jsonc` sets `FERMI_LOCAL_DEV=true`.
 Channel bindings, such as the Slack finance channel mapping to `household-finance`, are
 daemon prompt rules rather than worker state, so a fixture only seeds the skill and the
 allowlist.
