@@ -53,6 +53,11 @@
 		// fermi.example.workers.dev. scripts/render-wrangler.mjs requires it.
 		"FERMI_PUBLIC_URL": "__FERMI_PUBLIC_URL__",
 		"FERMI_ENV": "development",
+		// Auth: /mcp and /sse require OAuth unless FERMI_LOCAL_DEV is exactly "true". Never set
+		// FERMI_LOCAL_DEV here or in any deployed config; for local dev pass
+		// `--var FERMI_LOCAL_DEV:true` to wrangler dev. FERMI_AUTH_ENABLED ("true" in deploys) gates
+		// the /apps pages, and with FERMI_LOCAL_DEV=true it still validates any request that sends an
+		// Authorization header.
 		"CF_ACCOUNT_ID": "__CF_ACCOUNT_ID__"
 	}
 }

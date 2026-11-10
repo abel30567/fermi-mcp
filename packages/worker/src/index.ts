@@ -31,6 +31,7 @@ import { PhoneCallDO } from './do/phone-call.ts'
 import { SandboxStorageDO } from './do/sandbox-storage.ts'
 import { handleAppsRequest } from './lib/apps-handler.ts'
 import { handleAppsLoginGet, handleAppsLoginPost, handleAppsLogout } from './lib/apps-login.ts'
+import { bypassAuth } from './lib/auth-mode.ts'
 import { getCapabilityRegistry } from './lib/capability.ts'
 import { handleCallback, startFlow } from './lib/oauth-flow.ts'
 import { handleAuthorizeGet, handleAuthorizePost } from './lib/oauth-handlers.ts'
@@ -460,7 +461,7 @@ const oauthProvider = new OAuthProvider({
 
 export default {
 	fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> | Response {
-		if (env.FERMI_AUTH_ENABLED !== 'true') {
+		if (bypassAuth(request, env)) {
 			return defaultHandler.fetch(request, env, ctx)
 		}
 		return oauthProvider.fetch(request, env, ctx)

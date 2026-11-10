@@ -59,8 +59,8 @@ capability; the macOS `mac_*` tools are MCP-only.
   ┌──────────────────────────────────────────────────────────────────────┐
   │                        Cloudflare Worker (src/index.ts)               │
   │                                                                      │
-  │  Auth gate:  FERMI_AUTH_ENABLED=true → OAuthProvider wraps /mcp,/sse  │
-  │              otherwise  → open (no transport auth)                    │
+  │  Auth gate:  OAuthProvider wraps /mcp,/sse (default)                  │
+  │              FERMI_LOCAL_DEV=true → open (local dev only)             │
   │                                                                      │
   │  Routes: /mcp /sse  /oauth/* /apps/*  /tg/webhook /slack/events       │
   │          /canvas/:id  /health  /capabilities (admin, Bearer)          │
@@ -91,12 +91,14 @@ sandboxed code never gets a raw `fetch`.
 
 ## Request entry points (`src/index.ts`)
 
-The default export branches on `FERMI_AUTH_ENABLED`:
+The default export branches on `bypassAuth()` (`src/lib/auth-mode.ts`):
 
-- **`!== "true"`** — requests go straight to `defaultHandler`. `/mcp` and `/sse` are
-  served with **no transport authentication**. This is the local-dev / trusted-network
-  default.
-- **`=== "true"`** — requests go through `@cloudflare/workers-oauth-provider`, which
+- **`FERMI_LOCAL_DEV === "true"`** — requests go straight to `defaultHandler`. `/mcp` and
+  `/sse` are served with **no transport authentication**. Local dev only. Exception: with
+  `FERMI_AUTH_ENABLED === "true"` too, a request carrying an `Authorization` header still
+  goes through the OAuth provider.
+- **otherwise (default, including unset or mistyped values)** — requests go through
+  `@cloudflare/workers-oauth-provider`, which
   gates `/mcp` and `/sse` behind an OAuth flow. The consent screen
   (`src/lib/oauth-handlers.ts`) validates `FERMI_OWNER_SECRET` and, if configured, a
   TOTP code.

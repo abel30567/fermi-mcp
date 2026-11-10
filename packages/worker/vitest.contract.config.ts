@@ -43,6 +43,8 @@ export default defineWorkersConfig(async () => ({
 				wrangler: { configPath: './wrangler.test.jsonc' },
 				miniflare: {
 					bindings: {
+						// Auth is on by default; the contract tests drive /mcp without OAuth.
+						FERMI_LOCAL_DEV: 'true',
 						TEST_MIGRATIONS: await readD1Migrations(path.join(__dirname, 'migrations')),
 					},
 				},
