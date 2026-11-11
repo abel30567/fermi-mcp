@@ -29,7 +29,7 @@ Core utilities and data stores used across the worker.
 - **frontmatter.ts** — SKILL.md YAML frontmatter parser
 - **shell-blocklist.ts** — Dangerous command pattern matching
 - **host-guard.ts** — Private/loopback IP literal check + best-effort DoH resolve check for secret destinations
-- **crypto.ts** — Encryption helpers for secrets vault
+- **crypto.ts** — Encryption helpers for secrets vault; `timingSafeEqual` for every admin bearer / owner secret compare
 - **mime-types.ts** — File extension to MIME type mapping
 
 ## OAuth / Apps

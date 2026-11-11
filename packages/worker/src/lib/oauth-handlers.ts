@@ -1,18 +1,15 @@
 import type { AuthRequest } from '@cloudflare/workers-oauth-provider'
+import { throttleHit } from '../do/fleet-do.ts'
 import { writeAudit } from './audit.ts'
+import { timingSafeEqual } from './crypto.ts'
 import { getSecret } from './secrets-store.ts'
 import { validateTotp } from './totp.ts'
 
 const RATE_LIMIT_MAX = 5
 const RATE_LIMIT_WINDOW_S = 60
 
-async function checkRateLimit(ip: string, env: Env): Promise<boolean> {
-	const key = `ratelimit:oauth:auth:${ip}`
-	const current = await env.FERMI_KV.get(key)
-	const count = current ? Number.parseInt(current, 10) : 0
-	if (count >= RATE_LIMIT_MAX) return false
-	await env.FERMI_KV.put(key, String(count + 1), { expirationTtl: RATE_LIMIT_WINDOW_S })
-	return true
+function checkRateLimit(ip: string, env: Env): Promise<boolean> {
+	return throttleHit(env, `ratelimit:oauth:auth:${ip}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_S)
 }
 
 function escapeHtml(value: string): string {
@@ -57,7 +54,7 @@ export async function handleAuthorizePost(request: Request, env: Env): Promise<R
 	const ownerSecret = (form.get('owner_secret') as string | null) ?? ''
 	const totpCode = (form.get('totp_code') as string | null) ?? ''
 
-	if (!env.FERMI_OWNER_SECRET || ownerSecret !== env.FERMI_OWNER_SECRET) {
+	if (!env.FERMI_OWNER_SECRET || !timingSafeEqual(ownerSecret, env.FERMI_OWNER_SECRET)) {
 		await writeAudit(env.FERMI_DB, {
 			tool: 'oauth_authorize',
 			args_hash: ip,
