@@ -1,6 +1,11 @@
-import { SELF, env } from 'cloudflare:test'
+import { SELF, env, runInDurableObject } from 'cloudflare:test'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { CANVAS_TOKEN_TTL_MS, issueCanvasToken } from '../../src/lib/canvas-auth.ts'
+import {
+	CANVAS_TOKEN_TTL_MS,
+	canvasStub,
+	hashCanvasToken,
+	issueCanvasToken,
+} from '../../src/lib/canvas-auth.ts'
 import { describeTool } from './describe-tool.ts'
 import { McpClient, resultJson } from './mcp-client.ts'
 
@@ -128,6 +133,23 @@ describe('canvas share tokens', () => {
 		const expires = Date.parse(opened.expires_at)
 		expect(expires).toBeGreaterThanOrEqual(before + CANVAS_TOKEN_TTL_MS)
 		expect(expires).toBeLessThanOrEqual(Date.now() + CANVAS_TOKEN_TTL_MS)
+	})
+
+	it('stores only the SHA-256 hash of each token, never the raw token', async () => {
+		const opened = await open()
+		const stored = await runInDurableObject(canvasStub(env, opened.canvas_id), (_i, state) =>
+			state.storage.list(),
+		)
+		const dump = JSON.stringify([...stored.entries()])
+		const tokenKeys = [...stored.keys()].filter((k) => k.startsWith('token:'))
+		const expected = await Promise.all(
+			[opened.read_token, opened.write_token].map(async (t) => `token:${await hashCanvasToken(t)}`),
+		)
+		for (const token of [opened.read_token, opened.write_token]) {
+			expect(dump).not.toContain(token)
+		}
+		expect(tokenKeys.sort()).toEqual(expected.sort())
+		for (const key of tokenKeys) expect(key).toMatch(/^token:[0-9a-f]{64}$/)
 	})
 
 	it('rejects GET, POST and the WebSocket upgrade without a token', async () => {
