@@ -15,6 +15,7 @@ Core utilities and data stores used across the worker.
 - **retrievers-store.ts** — Named D1 query templates
 - **oauth-store.ts** — OAuth token/code/client management
 - **canvas-store.ts** — Canvas state persistence
+- **canvas-auth.ts** — Canvas share tokens: issue (hashed, TTL, read|write), revoke, /canvas/* gate
 - **fs-store.ts** — R2 filesystem with scope checking
 - **capability-fts.ts** / **capability.ts** — Capability catalog + FTS indexing
 

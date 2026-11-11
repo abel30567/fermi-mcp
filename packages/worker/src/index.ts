@@ -32,6 +32,7 @@ import { SandboxStorageDO } from './do/sandbox-storage.ts'
 import { handleAppsRequest } from './lib/apps-handler.ts'
 import { handleAppsLoginGet, handleAppsLoginPost, handleAppsLogout } from './lib/apps-login.ts'
 import { bypassAuth } from './lib/auth-mode.ts'
+import { authorizeCanvasRequest, canvasStub } from './lib/canvas-auth.ts'
 import { getCapabilityRegistry } from './lib/capability.ts'
 import { handleCallback, handleOauthStart } from './lib/oauth-flow.ts'
 import { handleAuthorizeGet, handleAuthorizePost } from './lib/oauth-handlers.ts'
@@ -425,8 +426,9 @@ const defaultHandler = {
 		if (url.pathname.startsWith('/canvas/')) {
 			const canvasId = url.pathname.slice('/canvas/'.length).split('/')[0]
 			if (!canvasId) return new Response('Missing canvas ID', { status: 400 })
-			const id = env.CANVAS_DO.idFromName(canvasId)
-			return env.CANVAS_DO.get(id).fetch(request)
+			const denied = await authorizeCanvasRequest(request, env, canvasId)
+			if (denied) return denied
+			return canvasStub(env, canvasId).fetch(request)
 		}
 
 		return new Response('Not Found', { status: 404 })

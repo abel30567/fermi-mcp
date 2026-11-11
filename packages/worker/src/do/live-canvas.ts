@@ -1,4 +1,12 @@
 import { DurableObject } from 'cloudflare:workers'
+import type { CanvasScope } from '../lib/canvas-auth.ts'
+
+interface StoredToken {
+	scope: CanvasScope
+	expiresAt: number
+}
+
+const TOKEN_PREFIX = 'token:'
 
 export class LiveCanvasDO extends DurableObject<Env> {
 	private sessions = new Set<WebSocket>()
@@ -14,6 +22,30 @@ export class LiveCanvasDO extends DurableObject<Env> {
 		await this.ctx.storage.put('canvas_state', merged)
 		this.broadcast(merged)
 		return merged
+	}
+
+	async issueToken(hash: string, scope: CanvasScope, expiresAt: number): Promise<void> {
+		await this.ctx.storage.put<StoredToken>(TOKEN_PREFIX + hash, { scope, expiresAt })
+	}
+
+	/** Scope of a live token, or null if unknown, revoked or expired (expired ones are pruned). */
+	async tokenScope(hash: string): Promise<CanvasScope | null> {
+		const stored = await this.ctx.storage.get<StoredToken>(TOKEN_PREFIX + hash)
+		if (!stored) return null
+		if (stored.expiresAt <= Date.now()) {
+			await this.ctx.storage.delete(TOKEN_PREFIX + hash)
+			return null
+		}
+		return stored.scope
+	}
+
+	/** Deletes one token by hash, or all of them; returns how many were removed. */
+	async revokeTokens(hash?: string): Promise<number> {
+		if (hash !== undefined) {
+			return (await this.ctx.storage.delete(TOKEN_PREFIX + hash)) ? 1 : 0
+		}
+		const keys = [...(await this.ctx.storage.list({ prefix: TOKEN_PREFIX })).keys()]
+		return keys.length ? this.ctx.storage.delete(keys) : 0
 	}
 
 	private broadcast(state: Record<string, unknown>) {
@@ -55,7 +87,8 @@ export class LiveCanvasDO extends DurableObject<Env> {
 		const state = await this.getState()
 		const html = renderCanvasHtml(state)
 		return new Response(html, {
-			headers: { 'Content-Type': 'text/html; charset=utf-8' },
+			// The page URL carries the share token; keep it out of Referer headers.
+			headers: { 'Content-Type': 'text/html; charset=utf-8', 'Referrer-Policy': 'no-referrer' },
 		})
 	}
 
@@ -91,7 +124,7 @@ pre{background:#1e293b;padding:1.6rem;border-radius:0.8rem;overflow-x:auto;font-
 <script>
 const pre = document.getElementById('state');
 const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-const ws = new WebSocket(protocol + '//' + location.host + location.pathname);
+const ws = new WebSocket(protocol + '//' + location.host + location.pathname + location.search);
 ws.onmessage = (e) => {
   try {
     const msg = JSON.parse(e.data);

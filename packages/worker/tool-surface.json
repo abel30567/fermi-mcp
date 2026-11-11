@@ -887,6 +887,31 @@
 		"box": false
 	},
 	{
+		"name": "canvas_revoke",
+		"descriptionSha256": "78a90509e3dc7ac3f0e8313b7dca4e26d4e60f1569ad459b6fb107c93e523b0f",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"canvas_id": {
+					"type": "string",
+					"description": "The canvas ID whose tokens to revoke"
+				},
+				"token": {
+					"type": "string",
+					"description": "The token to revoke; omit to revoke all tokens of the canvas"
+				}
+			},
+			"required": [
+				"canvas_id"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"risk": "low",
+		"mutates": true,
+		"box": false
+	},
+	{
 		"name": "canvas_update",
 		"descriptionSha256": "b696c60c6865eca7d3c14205269f68f3b3235474ff8ee2fa0c582d2f0282e27a",
 		"inputSchema": {
