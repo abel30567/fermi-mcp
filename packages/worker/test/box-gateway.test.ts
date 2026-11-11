@@ -346,38 +346,6 @@ describe('box gateway', () => {
 		expect(withRepo.secrets.GITHUB_TOKEN).toBe('ghp_test')
 	})
 
-	it('writeback rotates only whitelisted bundles and preserves allowlists', async () => {
-		await setupSecretsSchema()
-		await clearSecrets()
-		await seedBoxAndAgent()
-		await putSecret(
-			{
-				name: 'CPA_AUTH_CODEX',
-				scope: 'app',
-				value: '{"refresh_token":"old"}',
-				allowedHosts: ['auth.openai.com'],
-			},
-			env,
-		)
-
-		const res = await handleBoxInferenceAuthUpdate(
-			req('/box/inference-auth/update', {
-				secrets: {
-					CPA_AUTH_CODEX: '{"refresh_token":"rotated"}',
-					CLAUDE_CODE_OAUTH_TOKEN: 'nice-try',
-					RANDOM_NAME: 'nope',
-				},
-			}),
-			env,
-		)
-		expect(await res.json()).toMatchObject({ ok: true, updated: ['CPA_AUTH_CODEX'] })
-
-		const rotated = await getSecret('CPA_AUTH_CODEX', 'app', '', env)
-		expect(rotated?.value).toBe('{"refresh_token":"rotated"}')
-		expect(rotated?.metadata.allowed_hosts).toEqual(['auth.openai.com'])
-		expect(await getSecret('CLAUDE_CODE_OAUTH_TOKEN', 'app', '', env)).toBeNull()
-	})
-
 	it('session-lease is bound to the launch: refuses a session not named in payload.sessions', async () => {
 		await setupWebSessionSchema()
 		await clearWebSessions()
@@ -489,5 +457,201 @@ describe('box gateway', () => {
 			pending_control: number
 		}
 		expect(body).toMatchObject({ ok: true, pending: 1, pending_control: 0 })
+	})
+})
+
+describe('box inference-auth writeback', () => {
+	const OLD = '{"refresh_token":"old"}'
+
+	async function seedRouteBox(boxId: string, route?: 'claude' | 'codex' | 'grok'): Promise<void> {
+		const agentId = `ca_${boxId}`
+		await registerBox(env.FERMI_DB, {
+			boxId,
+			meta: { ...(route ? { agent_id: agentId } : {}), token_hash: await sha256Hex(SECRET) },
+		})
+		if (route) {
+			await createCloudAgent(env.FERMI_DB, {
+				id: agentId,
+				queue: `agent:${agentId}`,
+				prompt: 'p',
+				proofContract: 'pc',
+				route,
+			})
+		}
+	}
+
+	async function servedVersion(boxId: string, name: string): Promise<number> {
+		const res = await handleBoxInferenceAuth(
+			req('/box/inference-auth', {}, `${boxId}.${SECRET}`),
+			env,
+		)
+		const json = (await res.json()) as { versions: Record<string, number> }
+		return json.versions[name]
+	}
+
+	function update(boxId: string, body: unknown): Promise<Response> {
+		return handleBoxInferenceAuthUpdate(
+			req('/box/inference-auth/update', body, `${boxId}.${SECRET}`),
+			env,
+		)
+	}
+
+	const storedValue = async (name: string) => (await getSecret(name, 'app', '', env))?.value
+
+	beforeAll(async () => {
+		await setupFleetSchema()
+		await setupSecretsSchema()
+	})
+
+	beforeEach(async () => {
+		await clearFleet()
+		await clearSecrets()
+		await putSecret(
+			{ name: 'CPA_AUTH_CODEX', scope: 'app', value: OLD, allowedHosts: ['auth.openai.com'] },
+			env,
+		)
+		await putSecret({ name: 'CPA_AUTH_XAI', scope: 'app', value: OLD }, env)
+		await putSecret({ name: 'CPA_API_KEY', scope: 'app', value: 'k' }, env)
+	})
+
+	it('a codex box updates CPA_AUTH_CODEX only, preserving allowlists and advancing the version', async () => {
+		await seedRouteBox('box-cx', 'codex')
+		const v = await servedVersion('box-cx', 'CPA_AUTH_CODEX')
+		expect(Number.isSafeInteger(v)).toBe(true)
+
+		const rotated = '{"refresh_token":"rotated"}'
+		const res = await update('box-cx', {
+			secrets: { CPA_AUTH_CODEX: rotated },
+			versions: { CPA_AUTH_CODEX: v },
+		})
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { updated: string[]; versions: Record<string, number> }
+		expect(json.updated).toEqual(['CPA_AUTH_CODEX'])
+		expect(json.versions.CPA_AUTH_CODEX).toBeGreaterThan(v)
+
+		const stored = await getSecret('CPA_AUTH_CODEX', 'app', '', env)
+		expect(stored?.value).toBe(rotated)
+		expect(stored?.metadata.allowed_hosts).toEqual(['auth.openai.com'])
+		expect(stored?.metadata.updated_at).toBe(json.versions.CPA_AUTH_CODEX)
+		expect(await storedValue('CPA_AUTH_XAI')).toBe(OLD)
+	})
+
+	it('a codex box writing CPA_AUTH_XAI (or any other bundle) gets 403 and nothing changes', async () => {
+		await seedRouteBox('box-cx', 'codex')
+		const xaiVersion = (await getSecret('CPA_AUTH_XAI', 'app', '', env))?.metadata.updated_at
+		for (const name of ['CPA_AUTH_XAI', 'CLAUDE_CODE_OAUTH_TOKEN', 'CPA_API_KEY']) {
+			const res = await update('box-cx', {
+				secrets: { [name]: '{"refresh_token":"hijack"}' },
+				versions: { [name]: xaiVersion },
+			})
+			expect(res.status).toBe(403)
+			expect(await res.json()).toMatchObject({ error: 'bundle_not_assigned_to_box' })
+		}
+		expect(await storedValue('CPA_AUTH_XAI')).toBe(OLD)
+		expect(await storedValue('CPA_API_KEY')).toBe('k')
+		expect(await getSecret('CLAUDE_CODE_OAUTH_TOKEN', 'app', '', env)).toBeNull()
+	})
+
+	it('a stale write (version already superseded) gets 409 and never clobbers the newer bundle', async () => {
+		await seedRouteBox('box-cx', 'codex')
+		const v = await servedVersion('box-cx', 'CPA_AUTH_CODEX')
+		const first = await update('box-cx', {
+			secrets: { CPA_AUTH_CODEX: '{"refresh_token":"newer"}' },
+			versions: { CPA_AUTH_CODEX: v },
+		})
+		expect(first.status).toBe(200)
+		const { versions } = (await first.json()) as { versions: Record<string, number> }
+
+		const stale = await update('box-cx', {
+			secrets: { CPA_AUTH_CODEX: '{"refresh_token":"older"}' },
+			versions: { CPA_AUTH_CODEX: v },
+		})
+		expect(stale.status).toBe(409)
+		expect(await stale.json()).toMatchObject({
+			error: 'stale_bundle',
+			current_version: versions.CPA_AUTH_CODEX,
+		})
+		expect(await storedValue('CPA_AUTH_CODEX')).toBe('{"refresh_token":"newer"}')
+	})
+
+	it('a box with no writable route (no mission, or the claude route) gets 403', async () => {
+		await seedRouteBox('box-none')
+		await seedRouteBox('box-cl', 'claude')
+		const v = (await getSecret('CPA_AUTH_CODEX', 'app', '', env))?.metadata.updated_at
+		for (const boxId of ['box-none', 'box-cl']) {
+			const res = await update(boxId, {
+				secrets: { CPA_AUTH_CODEX: '{"refresh_token":"x"}' },
+				versions: { CPA_AUTH_CODEX: v },
+			})
+			expect(res.status).toBe(403)
+		}
+		expect(await storedValue('CPA_AUTH_CODEX')).toBe(OLD)
+	})
+
+	it('concurrent updates from the same version: exactly one wins, the other gets 409', async () => {
+		await seedRouteBox('box-a', 'codex')
+		await seedRouteBox('box-b', 'codex')
+		const v = await servedVersion('box-a', 'CPA_AUTH_CODEX')
+		expect(await servedVersion('box-b', 'CPA_AUTH_CODEX')).toBe(v)
+
+		const [a, b] = await Promise.all(
+			['box-a', 'box-b'].map((boxId) =>
+				update(boxId, {
+					secrets: { CPA_AUTH_CODEX: `{"refresh_token":"${boxId}"}` },
+					versions: { CPA_AUTH_CODEX: v },
+				}),
+			),
+		)
+		expect([a.status, b.status].sort()).toEqual([200, 409])
+		const winner = a.status === 200 ? 'box-a' : 'box-b'
+		expect(await storedValue('CPA_AUTH_CODEX')).toBe(`{"refresh_token":"${winner}"}`)
+	})
+
+	it('a token from a destroyed box gets 401 and writes nothing', async () => {
+		await seedRouteBox('box-cx', 'codex')
+		const v = await servedVersion('box-cx', 'CPA_AUTH_CODEX')
+		await updateBox(env.FERMI_DB, 'box-cx', { status: 'destroyed', destroyedAt: Date.now() })
+		const res = await update('box-cx', {
+			secrets: { CPA_AUTH_CODEX: '{"refresh_token":"ghost"}' },
+			versions: { CPA_AUTH_CODEX: v },
+		})
+		expect(res.status).toBe(401)
+		expect(await storedValue('CPA_AUTH_CODEX')).toBe(OLD)
+	})
+
+	it('a malformed bundle payload gets 400 and writes nothing', async () => {
+		await seedRouteBox('box-cx', 'codex')
+		const v = await servedVersion('box-cx', 'CPA_AUTH_CODEX')
+		const good = '{"refresh_token":"ok"}'
+		const bodies: unknown[] = [
+			'not an object',
+			{},
+			{ secrets: [good], versions: { CPA_AUTH_CODEX: v } },
+			{ secrets: {}, versions: {} },
+			{ secrets: { CPA_AUTH_CODEX: good, CPA_AUTH_XAI: good }, versions: { CPA_AUTH_CODEX: v } },
+			{ secrets: { CPA_AUTH_CODEX: 42 }, versions: { CPA_AUTH_CODEX: v } },
+			{ secrets: { CPA_AUTH_CODEX: 'not json' }, versions: { CPA_AUTH_CODEX: v } },
+			{ secrets: { CPA_AUTH_CODEX: '["array"]' }, versions: { CPA_AUTH_CODEX: v } },
+			{
+				secrets: { CPA_AUTH_CODEX: `{"t":"${'x'.repeat(70_000)}"}` },
+				versions: { CPA_AUTH_CODEX: v },
+			},
+			{ secrets: { CPA_AUTH_CODEX: good } },
+			{ secrets: { CPA_AUTH_CODEX: good }, versions: { CPA_AUTH_CODEX: String(v) } },
+		]
+		for (const body of bodies) {
+			const res = await update('box-cx', body)
+			expect(res.status, JSON.stringify(body).slice(0, 120)).toBe(400)
+		}
+		const raw = await handleBoxInferenceAuthUpdate(
+			new Request('https://fermi.test/box/inference-auth/update', {
+				method: 'POST',
+				headers: { authorization: `Bearer box-cx.${SECRET}` },
+				body: '{not json',
+			}),
+			env,
+		)
+		expect(raw.status).toBe(400)
+		expect(await storedValue('CPA_AUTH_CODEX')).toBe(OLD)
 	})
 })
