@@ -34,15 +34,20 @@ describe('evals workflow', () => {
 		)
 	})
 
-	it('skips drafts and fork PRs in plan, and run and report only follow a plan that found the token', () => {
+	it('skips drafts and fork PRs in plan, and the other jobs only follow a plan that found the token', () => {
 		assert.match(
 			job('plan'),
 			/\n {4}if: github\.event\.pull_request\.head\.repo\.full_name == github\.repository && !github\.event\.pull_request\.draft\n/,
 		)
-		assert.match(job('run'), /\n {4}needs: plan\n {4}if: needs\.plan\.outputs\.ok == 'true'\n/)
+		for (const name of ['pending', 'run'])
+			assert.match(job(name), /\n {4}needs: plan\n {4}if: needs\.plan\.outputs\.ok == 'true'\n/)
 		assert.match(
 			job('report'),
 			/\n {4}needs: \[plan, run\]\n {4}if: \$\{\{ !cancelled\(\) && needs\.plan\.outputs\.ok == 'true' \}\}\n/,
+		)
+		assert.match(
+			job('publish'),
+			/\n {4}needs: \[plan, pending, report\]\n {4}if: \$\{\{ !cancelled\(\) && needs\.plan\.outputs\.ok == 'true' \}\}\n/,
 		)
 	})
 
@@ -57,7 +62,8 @@ describe('evals workflow', () => {
 			/CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR=3 bash scripts\/evals-ci\.sh run /,
 		)
 		assert.match(WF, /CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'/)
-		assert.doesNotMatch(job('report'), /\$\{\{[^}]*\bsecrets\.|\n {4}environment:/)
+		for (const name of ['pending', 'report', 'publish'])
+			assert.doesNotMatch(job(name), /\$\{\{[^}]*\bsecrets\.|\n {4}environment:/)
 		assert.doesNotMatch(job('run'), /pull-requests: write|statuses: write/)
 	})
 
@@ -72,17 +78,17 @@ describe('evals workflow', () => {
 		const jobs = WF.slice(WF.indexOf('\njobs:\n'))
 		assert.deepEqual(
 			[...jobs.matchAll(/\n {2}(\w+):\n/g)].map((m) => m[1]),
-			['plan', 'run', 'report'],
+			['plan', 'pending', 'run', 'report', 'publish'],
 		)
 	})
 
-	it('without a token visible to plan, plan only emits a notice and run and report skip', () => {
+	it('without a token visible to plan, plan only emits a notice and every other job skips', () => {
 		const token = job('plan').match(/\n {6}- id: token\n[\s\S]*?(?=\n {6}- )/)?.[0]
 		assert.ok(token)
 		assert.match(token, /HAS_TOKEN: \$\{\{ secrets\.CLAUDE_CODE_OAUTH_TOKEN != '' \}\}/)
 		assert.match(token, /\|\| echo "::notice::Evals skipped: /)
 		assert.doesNotMatch(job('plan'), /exit 1|::error::/)
-		for (const name of ['run', 'report'])
+		for (const name of ['pending', 'run', 'report', 'publish'])
 			assert.match(job(name), /needs\.plan\.outputs\.ok == 'true'/)
 	})
 
@@ -133,12 +139,67 @@ describe('evals workflow', () => {
 		)
 	})
 
-	it('posts the comment and the evals/smoke status from the report job', () => {
-		assert.match(job('report'), /gh pr comment "\$PR" -R "\$GITHUB_REPOSITORY" --body-file /)
-		assert.match(job('report'), /-f context=evals\/smoke /)
+	it('pending sets the pending status; report scans the comment; publish posts it and the final status', () => {
+		assert.match(
+			job('pending'),
+			/run: gh api "repos\/\$GITHUB_REPOSITORY\/statuses\/\$HEAD_SHA" -f state=pending -f context=evals\/smoke /,
+		)
 		assert.match(
 			job('report'),
 			/node scripts\/scan-secrets\.mjs "\$RUNNER_TEMP\/evals\/comment\.md"/,
+		)
+		assert.match(job('report'), /\n {6}report: \$\{\{ steps\.report\.outcome \}\}\n/)
+		assert.match(job('report'), /\n {6}outcome: \$\{\{ steps\.report\.outputs\.outcome \}\}\n/)
+		assert.match(
+			job('report'),
+			/name: evals-comment\n\s+path: \$\{\{ runner\.temp \}\}\/evals\/comment\.md\n/,
+		)
+		assert.match(job('publish'), /name: evals-comment\n/)
+		assert.match(
+			job('publish'),
+			/- if: needs\.report\.outputs\.report == 'success'\n\s+run: gh pr comment "\$PR" -R "\$GITHUB_REPOSITORY" --body-file /,
+		)
+		assert.match(
+			job('publish'),
+			/OUTCOME: \$\{\{ needs\.report\.outputs\.outcome \|\| 'failure' \}\}\n/,
+		)
+		assert.match(job('publish'), /-f context=evals\/smoke /)
+	})
+
+	// MCP-33: PR-controlled code never holds a write-scoped token.
+	it('no job that checks out or runs code has a write scope; GH_TOKEN reaches only gh-only jobs', () => {
+		const writes = (name) =>
+			[
+				...(job(name).match(/\n {4}permissions:\n((?: {6}.*\n)+)/)?.[1] ?? '').matchAll(
+					/(\S+): write/g,
+				),
+			].map((m) => m[1])
+		assert.deepEqual(WF.match(/\npermissions:\n((?: {2}.*\n)+)/)?.[1], '  contents: read\n')
+		assert.deepEqual(writes('plan'), [])
+		assert.deepEqual(writes('run'), [])
+		assert.deepEqual(writes('report'), [])
+		assert.match(job('report'), /\n {4}permissions:\n {6}contents: read\n {4}\S/)
+		for (const name of ['plan', 'run', 'report'])
+			assert.match(job(name), /\n {4}permissions:\n {6}contents: read\n {4}\S/, name)
+		assert.deepEqual(writes('pending'), ['statuses'])
+		assert.deepEqual(writes('publish'), ['pull-requests', 'statuses'])
+		for (const name of ['pending', 'publish']) {
+			assert.doesNotMatch(
+				job(name),
+				/actions\/checkout|\b(node|bash|sh|bun|bunx|npm|npx|scripts)\b/,
+				name,
+			)
+			for (const [, cmd] of job(name).matchAll(/\n\s+(?:- )?run: (\S+)/g))
+				assert.equal(cmd, 'gh', name)
+		}
+		for (const name of ['plan', 'run', 'report'])
+			assert.doesNotMatch(job(name), /GH_TOKEN|github\.token|\bgh /, name)
+	})
+
+	it('keeps the one workflow-level concurrency group and adds none per job', () => {
+		assert.deepEqual(
+			[...WF.matchAll(/\n( *)concurrency:/g)].map((m) => m[1].length),
+			[0],
 		)
 	})
 
@@ -150,6 +211,8 @@ describe('evals workflow', () => {
 			'fermi-mcp',
 			'${{ runner.temp }}/evals-cells',
 			'${{ runner.temp }}/evals-artifacts',
+			'${{ runner.temp }}/evals/comment.md',
+			'${{ runner.temp }}/evals',
 		])
 		for (const [, ref] of WF.matchAll(/\buses: (\S+)/g)) assert.match(ref, /@[0-9a-f]{40}$/, ref)
 	})
