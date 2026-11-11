@@ -49,7 +49,6 @@ describe('evals workflow', () => {
 	it('reads the token only in the evals environment, and only as an fd in the run step', () => {
 		const uses = [...WF.matchAll(/\$\{\{[^}]*\bsecrets\.(\w+)(.*)/g)].map((m) => m[1] + m[2])
 		assert.deepEqual(uses, ["CLAUDE_CODE_OAUTH_TOKEN != '' }}", 'CLAUDE_CODE_OAUTH_TOKEN }}'])
-		assert.match(job('plan'), /\n {4}environment: evals\n/)
 		assert.match(job('run'), /\n {4}environment: evals\n/)
 		assert.match(job('run'), /EVAL_TOKEN: \$\{\{ secrets\.CLAUDE_CODE_OAUTH_TOKEN \}\}\n/)
 		assert.match(job('run'), /exec 3< <\(printf '%s' "\$EVAL_TOKEN"\)\n\s+unset EVAL_TOKEN\n/)
@@ -60,6 +59,60 @@ describe('evals workflow', () => {
 		assert.match(WF, /CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'/)
 		assert.doesNotMatch(job('report'), /\$\{\{[^}]*\bsecrets\.|\n {4}environment:/)
 		assert.doesNotMatch(job('run'), /pull-requests: write|statuses: write/)
+	})
+
+	// MCP-34: evals' branch policy allows only master, so a plan bound to it failed on every PR merge ref.
+	it('binds only run to the evals environment, so plan cannot be rejected on a PR merge ref', () => {
+		assert.deepEqual(
+			[...WF.matchAll(/\n( *)environment:(.*)/g)].map((m) => [m[1].length, m[2]]),
+			[[4, ' evals']],
+		)
+		assert.doesNotMatch(job('plan'), /\n {4}environment:/)
+		assert.doesNotMatch(job('report'), /\n {4}environment:/)
+		const jobs = WF.slice(WF.indexOf('\njobs:\n'))
+		assert.deepEqual(
+			[...jobs.matchAll(/\n {2}(\w+):\n/g)].map((m) => m[1]),
+			['plan', 'run', 'report'],
+		)
+	})
+
+	it('without a token visible to plan, plan only emits a notice and run and report skip', () => {
+		const token = job('plan').match(/\n {6}- id: token\n[\s\S]*?(?=\n {6}- )/)?.[0]
+		assert.ok(token)
+		assert.match(token, /HAS_TOKEN: \$\{\{ secrets\.CLAUDE_CODE_OAUTH_TOKEN != '' \}\}/)
+		assert.match(token, /\|\| echo "::notice::Evals skipped: /)
+		assert.doesNotMatch(job('plan'), /exit 1|::error::/)
+		for (const name of ['run', 'report'])
+			assert.match(job(name), /needs\.plan\.outputs\.ok == 'true'/)
+	})
+
+	it('documents in the header what must change for evals to run again', () => {
+		const header = WF.slice(0, WF.indexOf('\non:\n'))
+		assert.match(header, /Only run is bound to the evals environment/)
+		assert.match(header, /To make evals actually run again/)
+		assert.match(header, /branch policy that permits PR merge refs/)
+	})
+
+	it('report tolerates a missing cell artifact', () => {
+		assert.match(
+			job('report'),
+			/- continue-on-error: true\n\s+uses: actions\/download-artifact@\w+ # v[\d.]+\n\s+with:\n\s+name: evals-cell\n/,
+		)
+	})
+
+	it('never runs on push (master is unaffected) and a .github/-only PR does not match its paths', () => {
+		assert.doesNotMatch(WF.slice(WF.indexOf('\non:\n'), WF.indexOf('\nconcurrency:')), /\bpush:/)
+		const globs = [...WF.matchAll(/\n {6}- '([^']+)'/g)].map((m) => m[1])
+		assert.deepEqual(globs, ['packages/worker/src/**', 'packages/worker/seeds/**'])
+		const matches = (file) => globs.some((g) => file.startsWith(g.replace(/\*\*$/, '')))
+		for (const file of [
+			'.github/workflows/evals.yml',
+			'.github/workflows/ci.yml',
+			'scripts/evals-workflow.test.mjs',
+		])
+			assert.equal(matches(file), false, file)
+		for (const file of ['packages/worker/src/index.ts', 'packages/worker/seeds/a.sql'])
+			assert.equal(matches(file), true, file)
 	})
 
 	it("runs fermi-daemon main's smoke, pinned to one commit, against this PR's head", () => {
