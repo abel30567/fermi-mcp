@@ -8,7 +8,7 @@ import {
 	updateBox,
 	updateCloudAgent,
 } from '../lib/fleet-store.ts'
-import { getSecret, putSecret } from '../lib/secrets-store.ts'
+import { getSecret, updateAppSecretIfVersion } from '../lib/secrets-store.ts'
 import {
 	claimTasks,
 	completeTask,
@@ -25,7 +25,13 @@ const ROUTE_SECRETS: Record<string, string[]> = {
 	codex: ['CPA_AUTH_CODEX', 'CPA_API_KEY'],
 	grok: ['CPA_AUTH_XAI', 'CPA_API_KEY'],
 }
-const WRITABLE_AUTH_SECRETS = new Set(['CPA_AUTH_CODEX', 'CPA_AUTH_XAI'])
+// The one bundle a box may write back, derived from its mission's route.
+// Routes absent here (claude) have nothing writable.
+const ROUTE_WRITABLE_BUNDLE: Record<string, string> = {
+	codex: 'CPA_AUTH_CODEX',
+	grok: 'CPA_AUTH_XAI',
+}
+const MAX_BUNDLE_BYTES = 65_536
 
 export async function sha256Hex(value: string): Promise<string> {
 	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
@@ -244,12 +250,18 @@ export async function handleBoxInferenceAuth(request: Request, env: Env): Promis
 	const sourceName = (name: string) =>
 		name === 'CLAUDE_CODE_OAUTH_TOKEN' ? claudeTokenSecretName(agent.account) : name
 
+	const writable = ROUTE_WRITABLE_BUNDLE[agent.route]
 	const values: Record<string, string> = {}
+	const versions: Record<string, number> = {}
 	const missing: string[] = []
 	for (const name of names) {
 		const secret = await getSecret(sourceName(name), 'app', '', env)
-		if (secret) values[name] = secret.value
-		else missing.push(sourceName(name))
+		if (!secret) {
+			missing.push(sourceName(name))
+			continue
+		}
+		values[name] = secret.value
+		if (name === writable) versions[name] = secret.metadata.updated_at
 	}
 	if (missing.length > 0) {
 		return Response.json(
@@ -257,38 +269,69 @@ export async function handleBoxInferenceAuth(request: Request, env: Env): Promis
 			{ status: 409 },
 		)
 	}
-	return Response.json({ ok: true, route: agent.route, secrets: values })
+	return Response.json({ ok: true, route: agent.route, secrets: values, versions })
 }
 
-/** Writeback for refreshed CLIProxyAPI OAuth bundles (rotation-safe fleet). */
+/**
+ * Writeback for a refreshed CLIProxyAPI OAuth bundle (rotation-safe fleet).
+ * A box may write only the bundle its mission's route uses (403 otherwise),
+ * and only as a compare-and-swap on the version it was served by
+ * /box/inference-auth: a stale write gets 409 and never clobbers a newer
+ * bundle. Body: { secrets: { <bundle>: <json> }, versions: { <bundle>: n } }.
+ */
 export async function handleBoxInferenceAuthUpdate(request: Request, env: Env): Promise<Response> {
 	const box = await authBox(request, env)
 	if (!box) return new Response('Unauthorized', { status: 401 })
-	const body = (await request.json().catch(() => ({}))) as { secrets?: Record<string, string> }
-	if (!body.secrets || typeof body.secrets !== 'object') {
-		return new Response('Bad Request', { status: 400 })
+	const body = (await request.json().catch(() => null)) as {
+		secrets?: unknown
+		versions?: unknown
+	} | null
+	const secrets = isPlainObject(body?.secrets) ? body.secrets : null
+	const versions = isPlainObject(body?.versions) ? body.versions : {}
+	const entries = secrets ? Object.entries(secrets) : []
+	if (entries.length !== 1) return badBundle('expected exactly one bundle in secrets')
+	const [name, value] = entries[0]
+
+	const agentId = boxMeta(box).agent_id
+	const agent = agentId ? await getCloudAgent(env.FERMI_DB, agentId) : null
+	const writable = agent ? ROUTE_WRITABLE_BUNDLE[agent.route] : undefined
+	if (name !== writable) {
+		return Response.json({ ok: false, error: 'bundle_not_assigned_to_box' }, { status: 403 })
 	}
-	const updated: string[] = []
-	for (const [name, value] of Object.entries(body.secrets)) {
-		if (!WRITABLE_AUTH_SECRETS.has(name) || typeof value !== 'string' || value.length > 65_536) {
-			continue
-		}
-		// The upsert overwrites allowlists; carry the existing ones forward.
-		const existing = await getSecret(name, 'app', '', env)
-		await putSecret(
-			{
-				name,
-				scope: 'app',
-				value,
-				allowedHosts: existing?.metadata.allowed_hosts ?? [],
-				allowedCapabilities: existing?.metadata.allowed_capabilities ?? [],
-				allowedPackages: existing?.metadata.allowed_packages ?? [],
-			},
-			env,
+
+	const version = versions[name]
+	if (typeof value !== 'string' || value.length > MAX_BUNDLE_BYTES || !isJsonObject(value)) {
+		return badBundle('bundle must be a JSON object string under 64 KiB')
+	}
+	if (typeof version !== 'number' || !Number.isSafeInteger(version)) {
+		return badBundle('versions must carry the integer version served by /box/inference-auth')
+	}
+
+	const next = await updateAppSecretIfVersion(name, value, version, env)
+	if (next === null) {
+		const current = await getSecret(name, 'app', '', env)
+		return Response.json(
+			{ ok: false, error: 'stale_bundle', current_version: current?.metadata.updated_at ?? null },
+			{ status: 409 },
 		)
-		updated.push(name)
 	}
-	return Response.json({ ok: true, updated })
+	return Response.json({ ok: true, updated: [name], versions: { [name]: next } })
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+	return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+function isJsonObject(s: string): boolean {
+	try {
+		return isPlainObject(JSON.parse(s))
+	} catch {
+		return false
+	}
+}
+
+function badBundle(detail: string): Response {
+	return Response.json({ ok: false, error: 'malformed_bundle', detail }, { status: 400 })
 }
 
 /** Box leases a captured web session (concurrency-capped, allowed_boxes-scoped). */
