@@ -125,6 +125,30 @@ export async function putSecret(input: PutSecretInput, env: Env): Promise<Secret
 	}
 }
 
+/**
+ * Compare-and-swap on an existing app secret's value, keyed on `updated_at`
+ * as the version. Writes only if the row is still at `expectedVersion`; the
+ * new version is strictly greater, so a stale writer can never match it.
+ * Allowlists are left untouched. Returns the new version, or null when the
+ * row is missing or has moved on.
+ */
+export async function updateAppSecretIfVersion(
+	name: string,
+	value: string,
+	expectedVersion: number,
+	env: Env,
+): Promise<number | null> {
+	const { encrypted, iv } = await encryptSecret(value, env)
+	const row = await env.FERMI_DB.prepare(
+		`UPDATE secrets SET encrypted_value = ?1, iv = ?2, updated_at = MAX(?3, updated_at + 1)
+		 WHERE name = ?4 AND scope = 'app' AND session_id = '' AND updated_at = ?5
+		 RETURNING updated_at`,
+	)
+		.bind(encrypted, iv, Date.now(), name, expectedVersion)
+		.first<{ updated_at: number }>()
+	return row?.updated_at ?? null
+}
+
 export async function deleteSecret(
 	name: string,
 	scope: SecretScope,
