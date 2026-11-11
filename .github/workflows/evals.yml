@@ -5,8 +5,11 @@ name: Evals
 # when unit tests pass. Checks out abel30567/fermi-daemon@main (public, no token), pinned to one
 # commit for all three jobs, and runs its scripts/evals-ci.sh with the base scenarios of
 # evals/smoke.json (--no-variants), k=3, the baseline of evals/matrix.json, with this PR's head as
-# --worker. Three jobs: plan → run (holds the token) → report (PR comment + commit status
-# evals/smoke, no secrets).
+# --worker. Jobs: plan → pending (commit status evals/smoke: pending) and run (holds the token)
+# → report (builds the comment, no secrets) → publish (PR comment + final evals/smoke status).
+# - Least privilege (MCP-33): only pending and publish get a write-scoped GITHUB_TOKEN, and
+#   neither checks anything out or runs anything but gh; every job that checks out code
+#   (plan, run, report) has contents: read only.
 # - Only on non-draft PR heads (ready_for_review, then each push) that touch the worker's src or
 #   seeds; a newer push cancels the older run.
 # - Fork PRs never get the jobs (skipped, not failed).
@@ -46,10 +49,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      statuses: write # the evals/smoke commit status
-    env:
-      GH_TOKEN: ${{ github.token }}
-      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     outputs:
       ok: ${{ steps.token.outputs.ok }}
       daemon: ${{ steps.plan.outputs.daemon }}
@@ -76,8 +75,20 @@ jobs:
             echo "entry=$(jq -c '.baseline' evals/matrix.json)"
             echo "scenarios=$(jq -r '.scenarios | join(" ")' evals/smoke.json)"
           } >> "$GITHUB_OUTPUT"
-      - if: steps.token.outputs.ok == 'true'
-        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state=pending -f context=evals/smoke -f description=running -f target_url="$RUN_URL" > /dev/null
+
+  # Write scope, no checkout: only gh.
+  pending:
+    needs: plan
+    if: needs.plan.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      statuses: write # the evals/smoke commit status
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - run: gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state=pending -f context=evals/smoke -f description=running -f target_url="$RUN_URL" > /dev/null
 
   run:
     needs: plan
@@ -85,6 +96,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: evals
     timeout-minutes: 240
+    permissions:
+      contents: read
     env:
       CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'
       CLAUDE_CODE_VERSION: 2.1.308
@@ -154,14 +167,12 @@ jobs:
     if: ${{ !cancelled() && needs.plan.outputs.ok == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Runs fermi-daemon's scripts and this PR's scripts/evals-scenarios.mjs: read-only token.
     permissions:
       contents: read
-      pull-requests: write
-      statuses: write # the evals/smoke commit status
-    env:
-      GH_TOKEN: ${{ github.token }}
-      PR: ${{ github.event.pull_request.number }}
-      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    outputs:
+      report: ${{ steps.report.outcome }}
+      outcome: ${{ steps.report.outputs.outcome }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -206,13 +217,42 @@ jobs:
           path: ${{ runner.temp }}/evals-artifacts
           if-no-files-found: error
           retention-days: 30
+      # For the publish job only (1 day): the scanned comment.
       - if: steps.report.outcome == 'success'
-        run: gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/evals/comment.md"
-      - if: "!cancelled()"
-        env:
-          OUTCOME: ${{ steps.report.outputs.outcome || 'failure' }}
-        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state="$OUTCOME" -f context=evals/smoke -f description="evals $OUTCOME" -f target_url="$RUN_URL" > /dev/null
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: evals-comment
+          path: ${{ runner.temp }}/evals/comment.md
+          if-no-files-found: error
+          retention-days: 1
       - if: steps.report.outputs.outcome == 'failure'
         run: |
           echo "::error::Evals failed: see the report in the job summary"
           exit 1
+
+  # Write scopes, no checkout: only gh, on the report's scanned comment and outcome. Waits for
+  # pending so the final status can never be overwritten by a late pending.
+  publish:
+    needs: [plan, pending, report]
+    if: ${{ !cancelled() && needs.plan.outputs.ok == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+      statuses: write # the evals/smoke commit status
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - if: needs.report.outputs.report == 'success'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: evals-comment
+          path: ${{ runner.temp }}/evals
+      - if: needs.report.outputs.report == 'success'
+        run: gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/evals/comment.md"
+      - if: "!cancelled()"
+        env:
+          OUTCOME: ${{ needs.report.outputs.outcome || 'failure' }}
+        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state="$OUTCOME" -f context=evals/smoke -f description="evals $OUTCOME" -f target_url="$RUN_URL" > /dev/null
