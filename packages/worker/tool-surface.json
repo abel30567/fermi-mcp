@@ -3368,7 +3368,7 @@
 	},
 	{
 		"name": "secret_resolve",
-		"descriptionSha256": "0c60ff776b3e8f7579fdbbaabd584c38c63a3f4a68282c3456c2a454fa5eca4a",
+		"descriptionSha256": "0a010ba2a751f1dbd9cee8b706f7220a1134c1631645d36a1151725a6be04c6a",
 		"inputSchema": {
 			"type": "object",
 			"properties": {

@@ -19,7 +19,8 @@ export const BOX_ALLOWED_TOOLS = new Set<string>([
 // own data — removed from the box surface. A mission that needs a specific fact
 // or file gets it injected at launch (prompt/repo/sessions), not by reading the
 // owner's global stores. secret_resolve stays (capability-gated) because verify
-// flows need named secrets; scope it per-box when box principals land in secrets.
+// flows need named secrets; box sessions additionally need a secret_grants row
+// for their box or mission (lib/secret-grants.ts, default deny).
 
 export function isBoxAllowedTool(name: string): boolean {
 	return BOX_ALLOWED_TOOLS.has(name)
