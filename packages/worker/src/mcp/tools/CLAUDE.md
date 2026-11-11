@@ -12,7 +12,7 @@ Each file implements one or more MCP tools:
 | fs.ts | fs_read, fs_write, fs_list (R2, scope-checked) |
 | browser-cloud.ts | browser_navigate, browser_screenshot, browser_extract, browser_action |
 | browser-session.ts | browser_session_launch, _action, _close, _list, _request_human |
-| canvas-update.ts | canvas_update |
+| canvas-update.ts | canvas_update, canvas_revoke |
 | open-generated-ui.ts | open_generated_ui |
 | secrets.ts | secret_set, secret_list, secret_delete, secret_resolve |
 | connectors.ts | connector_set, connector_get, connector_list, connector_delete |

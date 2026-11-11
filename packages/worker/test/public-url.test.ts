@@ -9,7 +9,7 @@ const workerEnv = env as unknown as Env
 
 const fakeCanvasDO = {
 	idFromName: (name: string) => name,
-	get: () => ({ fetch: async () => Response.json({ ok: true }) }),
+	get: () => ({ fetch: async () => Response.json({ ok: true }), issueToken: async () => {} }),
 } as unknown as DurableObjectNamespace
 
 // Answers every D1 query: the oauth_clients lookup gets a client row, everything else is empty.
