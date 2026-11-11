@@ -128,6 +128,23 @@ describe('fetch gateway allowlist (MCP-30)', () => {
 		expect(leaked(evil[0])).toBe(false)
 	})
 
+	// Redirects that look same-host but change the origin must still strip.
+	it.each([
+		['port-only', 'https://api.example.com:8443'],
+		['scheme downgrade', 'http://api.example.com'],
+		['subdomain', 'https://sub.api.example.com'],
+	])('cross-origin %s redirect strips credential and secret headers', async (_, target) => {
+		dnsAnswers.set('sub.api.example.com', ['203.0.113.11'])
+		upstream(API, '/a', 302, { location: `${target}/b` })
+		const next = upstream(target, '/b')
+		const res = await handleGatewayRequest(authed(`${API}/a`), env)
+		expect(res.status).toBe(200)
+		expect(next).toHaveLength(1)
+		expect(next[0].headers.get('authorization')).toBeNull()
+		expect(next[0].headers.get('x-api-key')).toBeNull()
+		expect(leaked(next[0])).toBe(false)
+	})
+
 	it('301 turns POST into GET and drops the body', async () => {
 		upstream(API, '/form', 301, { location: '/done' }, 'POST')
 		const done = upstream(API, '/done')
