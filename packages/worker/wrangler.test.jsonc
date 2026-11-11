@@ -1,7 +1,7 @@
 // Local-only config for the MCP contract tests (vitest.contract.config.ts): the
 // real worker entry with local D1/KV/R2 and every Durable Object. AI, Vectorize,
 // LOADER and browser bindings are absent so the code takes its fallbacks.
-// FERMI_AUTH_ENABLED is unset, so /mcp is served without OAuth.
+// vitest.contract.config.ts binds the local-dev auth bypass, so /mcp is served without OAuth.
 {
 	"$schema": "../../node_modules/wrangler/config-schema.json",
 	"name": "fermi-contract-test",

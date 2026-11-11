@@ -47,8 +47,8 @@ One server, one memory, one permission spine — the host changes, the agent doe
 ```
 
 - **Worker** (`src/index.ts`) routes MCP (`/mcp`, `/sse`), channels, OAuth, the
-  `/apps/*` host, the canvas WebSocket, and cron dispatch. When `FERMI_AUTH_ENABLED`
-  is `true`, an OAuth provider gates the MCP transports; otherwise they are open.
+  `/apps/*` host, the canvas WebSocket, and cron dispatch. An OAuth provider gates the
+  MCP transports unless `FERMI_LOCAL_DEV` is exactly `true` (local dev only).
 - **Durable Objects**: `FermiMCP` (the agent, SQLite-backed), `LiveCanvasDO`,
   `SandboxStorageDO`, `BrowserSessionDO`.
 - **Storage**: D1 (memory, sessions/messages + FTS5, audit, hooks, skills metadata,
@@ -109,9 +109,10 @@ wrangler deploy --var FERMI_AUTH_ENABLED:true
 ```
 
 > ⚠️ Deploy with `FERMI_AUTH_ENABLED:true` (or set it in `wrangler.jsonc` `vars`).
-> Without it the MCP transports are **completely unauthenticated** on a public
-> `workers.dev` URL — anyone who finds it can read your memories, resolve your
-> stored secrets, and run code. Open mode is for `wrangler dev` only.
+> It gates the `/apps/*` pages; the MCP transports are behind OAuth regardless. Never
+> set `FERMI_LOCAL_DEV` on a deployment: it makes the MCP transports **completely
+> unauthenticated** on a public `workers.dev` URL — anyone who finds it can read your
+> memories, resolve your stored secrets, and run code. Open mode is for `wrangler dev` only.
 
 **Deploying from GitHub Actions.** `.github/workflows/deploy.yml` deploys `master` after CI
 passes. It renders `wrangler.jsonc` with `scripts/render-wrangler.mjs` from the `production`
@@ -167,7 +168,10 @@ applies one regex per line from the untracked `~/.config/fermi/private-patterns`
 ### Running the eval target
 
 `packages/worker/wrangler.eval.jsonc` runs the real worker fully locally for the live
-harness evals: no Cloudflare login, no remote ids, auth off. Outbound APIs are pointed
+harness evals: no Cloudflare login, no remote ids, and auth off via `"FERMI_LOCAL_DEV": "true"`
+in its `vars`. It is the only committed wrangler config allowed to set that bypass
+(`scripts/wrangler-configs.test.mjs` fails if any other, including `wrangler.template.jsonc`,
+does) and it is never deployed. Outbound APIs are pointed
 at local fakes with `SLACK_API_BASE`, `TELEGRAM_API_BASE`, `DISCORD_API_BASE`,
 `TWILIO_API_BASE` and `ANTHROPIC_API_BASE` (unset means the real service).
 `MACOS_MCP_URL` and any tokens come from the same env file.
@@ -195,7 +199,8 @@ replaces that chat's transcript with the same `sessions`/`messages` rows the cha
 gateways write, each turn dated `minutes_ago` before seed time, so `context_bootstrap`,
 `conversation_history` and `session_search` return it. With `sender`, user turns get
 the group attribution prefix (`[sender] text`). It writes each fixture skill (`{ slug, body, metadata? }`)
-by calling the real `skill_set` tool on the running worker's `/mcp` (auth is off there).
+by calling the real `skill_set` tool on the running worker's `/mcp`, which needs no OAuth
+because `wrangler.eval.jsonc` sets `FERMI_LOCAL_DEV=true`.
 Channel bindings, such as the Slack finance channel mapping to `household-finance`, are
 daemon prompt rules rather than worker state, so a fixture only seeds the skill and the
 allowlist.
@@ -221,10 +226,10 @@ Secrets are set with `wrangler secret put` (values entered interactively):
 | `MACOS_MCP_URL`, `MACOS_MCP_TOKEN` | optional | Local macOS bridge (enables the `mac_*` tools) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `OPENAI_API_KEY`, `FERMI_PUBLIC_URL` | for phone calls | Outbound calls. Read from the Fermi secrets store (`secret_set`, scope `app`) first, then from Worker vars/secrets of the same name |
 
-Auth mode is controlled by the `FERMI_AUTH_ENABLED` var. Set it to `true` to put the
-MCP transports behind OAuth — recommended for every deployed instance. Leaving it
-unset serves `/mcp` and `/sse` with no authentication, which is only appropriate for
-local `wrangler dev`.
+The MCP transports are behind OAuth by default: with no auth vars set, `/mcp` and `/sse`
+return 401 without a token. Only `FERMI_LOCAL_DEV=true` (exactly that value; never in a
+deployed config) serves them with no authentication, for local `wrangler dev`. Also set
+`FERMI_AUTH_ENABLED=true` on deployments: it gates the `/apps/*` pages.
 
 In OAuth mode, connecting hosts self-register and land on Fermi's consent screen,
 which validates your owner secret and (once enrolled via `totp_setup`) a TOTP code:

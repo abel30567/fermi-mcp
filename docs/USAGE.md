@@ -42,11 +42,14 @@ curl https://<worker>/health
 
 ## 2. Choose an auth mode
 
-Auth is controlled by the `FERMI_AUTH_ENABLED` var (set it in `wrangler.jsonc`
-`vars`, or via `wrangler deploy --var`).
+Auth fails closed: `/mcp` and `/sse` are behind OAuth unless `FERMI_LOCAL_DEV` is
+exactly `"true"`. A missing or mistyped value keeps auth on.
 
-**Open mode (default).** `FERMI_AUTH_ENABLED` unset or not `"true"`. `/mcp` and `/sse`
-are served with no transport authentication. Only use this with `wrangler dev` locally.
+**Open mode (local dev only).** `FERMI_LOCAL_DEV="true"`, e.g.
+`wrangler dev --var FERMI_LOCAL_DEV:true`. `/mcp` and `/sse` are served with no
+transport authentication. Never set it in a committed or deployed config. If
+`FERMI_AUTH_ENABLED="true"` is also set, a request that sends an `Authorization` header
+still goes through OAuth and its token is validated.
 
 > ⚠️ **A deployed Worker is internet-exposed.** `wrangler deploy` publishes to a
 > public `*.workers.dev` URL, and in open mode anyone who finds that URL gets full,
@@ -54,7 +57,9 @@ are served with no transport authentication. Only use this with `wrangler dev` l
 > (`secret_resolve`), code execution (`execute`), and browser sessions. Enable OAuth
 > mode before (or immediately after) your first deploy.
 
-**OAuth mode.** `FERMI_AUTH_ENABLED="true"`. The MCP transports are wrapped by an
+**OAuth mode (default).** `FERMI_LOCAL_DEV` unset. Also set `FERMI_AUTH_ENABLED="true"`
+(set it in `wrangler.jsonc` `vars`, or via `--var` at deploy) so the `/apps/*` pages
+require a login too. The MCP transports are wrapped by an
 OAuth provider; the consent screen validates `FERMI_OWNER_SECRET` (and a TOTP code if
 you've set one up). Use this for any deployed instance.
 

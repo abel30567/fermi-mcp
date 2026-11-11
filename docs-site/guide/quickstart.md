@@ -50,7 +50,7 @@ bunx wrangler secret put FERMI_AUTH_ENABLED    # value: true
 ```
 
 ::: warning Open mode is really open
-With `FERMI_AUTH_ENABLED` unset, `/mcp` has **no transport auth**. That is a local-dev convenience, not a deployment mode. A deployed Worker in open mode is a public agent with your memory in it.
+`/mcp` is behind OAuth unless `FERMI_LOCAL_DEV` is exactly `true`; then it has **no transport auth**. That is a local-dev convenience, not a deployment mode: never set `FERMI_LOCAL_DEV` on a deployed Worker. A deployed Worker in open mode is a public agent with your memory in it.
 :::
 
 ## Connect a host
