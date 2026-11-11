@@ -1,3 +1,4 @@
+import { timingSafeEqual } from '../lib/crypto.ts'
 import { CHANNELS, type Channel, sendChannelMessage } from './dispatch.ts'
 
 /**
@@ -8,7 +9,8 @@ import { CHANNELS, type Channel, sendChannelMessage } from './dispatch.ts'
 export async function handleNarrate(request: Request, env: Env): Promise<Response> {
 	const auth = request.headers.get('authorization') ?? ''
 	const token = env.FERMI_BEARER_TOKEN
-	if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
+	if (!token || !timingSafeEqual(auth, `Bearer ${token}`))
+		return new Response('Unauthorized', { status: 401 })
 
 	const body = (await request.json().catch(() => ({}))) as {
 		channel?: string

@@ -91,14 +91,16 @@ export async function sendWhatsAppMessage(env: Env, chatId: string, text: string
 export async function handleWaOutboxGet(request: Request, env: Env): Promise<Response> {
 	const auth = request.headers.get('authorization') ?? ''
 	const token = env.FERMI_BEARER_TOKEN
-	if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
+	if (!token || !timingSafeEqual(auth, `Bearer ${token}`))
+		return new Response('Unauthorized', { status: 401 })
 	return Response.json({ messages: await listPendingOutbox(env.FERMI_DB, 'wa', 10) })
 }
 
 export async function handleWaOutboxAck(request: Request, env: Env): Promise<Response> {
 	const auth = request.headers.get('authorization') ?? ''
 	const token = env.FERMI_BEARER_TOKEN
-	if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
+	if (!token || !timingSafeEqual(auth, `Bearer ${token}`))
+		return new Response('Unauthorized', { status: 401 })
 
 	const body = (await request.json().catch(() => ({}))) as { ids?: unknown }
 	const ids = body.ids

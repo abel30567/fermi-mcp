@@ -34,6 +34,7 @@ import { handleAppsLoginGet, handleAppsLoginPost, handleAppsLogout } from './lib
 import { bypassAuth } from './lib/auth-mode.ts'
 import { authorizeCanvasRequest, canvasStub } from './lib/canvas-auth.ts'
 import { getCapabilityRegistry } from './lib/capability.ts'
+import { timingSafeEqual } from './lib/crypto.ts'
 import { handleCallback, handleOauthStart } from './lib/oauth-flow.ts'
 import { handleAuthorizeGet, handleAuthorizePost } from './lib/oauth-handlers.ts'
 import { countPendingTasks } from './lib/task-store.ts'
@@ -97,7 +98,8 @@ const defaultHandler = {
 		if (url.pathname === '/cron/capability-reindex') {
 			const auth = request.headers.get('authorization') ?? ''
 			const token = env.FERMI_BEARER_TOKEN
-			if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
+			if (!token || !timingSafeEqual(auth, `Bearer ${token}`))
+				return new Response('Unauthorized', { status: 401 })
 			const result = await handleCapabilityReindex(env)
 			return Response.json(result)
 		}
@@ -105,7 +107,8 @@ const defaultHandler = {
 		if (url.pathname === '/admin/seed-skills' && request.method === 'POST') {
 			const auth = request.headers.get('authorization') ?? ''
 			const token = env.FERMI_BEARER_TOKEN
-			if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
+			if (!token || !timingSafeEqual(auth, `Bearer ${token}`))
+				return new Response('Unauthorized', { status: 401 })
 			const result = await seedSkills(env)
 			return Response.json(result)
 		}
@@ -113,7 +116,8 @@ const defaultHandler = {
 		if (url.pathname === '/admin/tg/set-webhook' && request.method === 'POST') {
 			const auth = request.headers.get('authorization') ?? ''
 			const token = env.FERMI_BEARER_TOKEN
-			if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
+			if (!token || !timingSafeEqual(auth, `Bearer ${token}`))
+				return new Response('Unauthorized', { status: 401 })
 			const body = (await request.json().catch(() => ({}))) as { url?: string }
 			const webhookUrl = body.url ?? `${url.origin}/tg/webhook`
 			const result = await setTelegramWebhook(env, webhookUrl)
@@ -129,7 +133,8 @@ const defaultHandler = {
 		if (url.pathname === '/admin/fleet/launch' && request.method === 'POST') {
 			const auth = request.headers.get('authorization') ?? ''
 			const token = env.FERMI_BEARER_TOKEN
-			if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
+			if (!token || !timingSafeEqual(auth, `Bearer ${token}`))
+				return new Response('Unauthorized', { status: 401 })
 			const body = (await request.json().catch(() => null)) as {
 				prompt?: string
 				proof_contract?: string
@@ -149,7 +154,8 @@ const defaultHandler = {
 		if (url.pathname === '/admin/session/capture' && request.method === 'POST') {
 			const auth = request.headers.get('authorization') ?? ''
 			const token = env.FERMI_BEARER_TOKEN
-			if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
+			if (!token || !timingSafeEqual(auth, `Bearer ${token}`))
+				return new Response('Unauthorized', { status: 401 })
 			const body = (await request.json().catch(() => null)) as {
 				name?: string
 				site?: string
@@ -178,7 +184,8 @@ const defaultHandler = {
 		if (url.pathname === '/admin/fleet/artifact' && request.method === 'GET') {
 			const auth = request.headers.get('authorization') ?? ''
 			const token = env.FERMI_BEARER_TOKEN
-			if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
+			if (!token || !timingSafeEqual(auth, `Bearer ${token}`))
+				return new Response('Unauthorized', { status: 401 })
 			const key = url.searchParams.get('key') ?? ''
 			if (!key.startsWith('artifacts/') || key.includes('..')) {
 				return new Response('Bad Request', { status: 400 })
@@ -195,14 +202,14 @@ const defaultHandler = {
 		}
 		if (url.pathname === '/admin/fleet/reservations' && request.method === 'GET') {
 			const auth = request.headers.get('authorization') ?? ''
-			if (!env.FERMI_BEARER_TOKEN || auth !== `Bearer ${env.FERMI_BEARER_TOKEN}`)
+			if (!env.FERMI_BEARER_TOKEN || !timingSafeEqual(auth, `Bearer ${env.FERMI_BEARER_TOKEN}`))
 				return new Response('Unauthorized', { status: 401 })
 			const ns = (env as unknown as { FLEET_DO: DurableObjectNamespace }).FLEET_DO
 			return ns.get(ns.idFromName('global')).fetch('https://do/state')
 		}
 		if (url.pathname === '/admin/fleet/release' && request.method === 'POST') {
 			const auth = request.headers.get('authorization') ?? ''
-			if (!env.FERMI_BEARER_TOKEN || auth !== `Bearer ${env.FERMI_BEARER_TOKEN}`)
+			if (!env.FERMI_BEARER_TOKEN || !timingSafeEqual(auth, `Bearer ${env.FERMI_BEARER_TOKEN}`))
 				return new Response('Unauthorized', { status: 401 })
 			const b = (await request.json().catch(() => ({}))) as { agent_id?: string }
 			if (!b.agent_id)
@@ -213,7 +220,7 @@ const defaultHandler = {
 		}
 		if (url.pathname === '/admin/fleet/pin-runner' && request.method === 'POST') {
 			const auth = request.headers.get('authorization') ?? ''
-			if (!env.FERMI_BEARER_TOKEN || auth !== `Bearer ${env.FERMI_BEARER_TOKEN}`)
+			if (!env.FERMI_BEARER_TOKEN || !timingSafeEqual(auth, `Bearer ${env.FERMI_BEARER_TOKEN}`))
 				return new Response('Unauthorized', { status: 401 })
 			const { pinRunner } = await import('./lib/fleet-config.ts')
 			const out = await pinRunner(env, await request.json().catch(() => ({})))
@@ -223,14 +230,14 @@ const defaultHandler = {
 		// runner pin stays on its own fetch+hash endpoint above.
 		if (url.pathname === '/admin/fleet/config' && request.method === 'GET') {
 			const auth = request.headers.get('authorization') ?? ''
-			if (!env.FERMI_BEARER_TOKEN || auth !== `Bearer ${env.FERMI_BEARER_TOKEN}`)
+			if (!env.FERMI_BEARER_TOKEN || !timingSafeEqual(auth, `Bearer ${env.FERMI_BEARER_TOKEN}`))
 				return new Response('Unauthorized', { status: 401 })
 			const { getFleetConfig } = await import('./lib/fleet-config.ts')
 			return Response.json({ ok: true, config: await getFleetConfig(env) })
 		}
 		if (url.pathname === '/admin/fleet/config' && request.method === 'POST') {
 			const auth = request.headers.get('authorization') ?? ''
-			if (!env.FERMI_BEARER_TOKEN || auth !== `Bearer ${env.FERMI_BEARER_TOKEN}`)
+			if (!env.FERMI_BEARER_TOKEN || !timingSafeEqual(auth, `Bearer ${env.FERMI_BEARER_TOKEN}`))
 				return new Response('Unauthorized', { status: 401 })
 			const body = await request.json().catch(() => null)
 			const { updateFleetConfig } = await import('./lib/fleet-config.ts')
@@ -240,7 +247,8 @@ const defaultHandler = {
 		if (url.pathname === '/admin/fleet/status' && request.method === 'GET') {
 			const auth = request.headers.get('authorization') ?? ''
 			const token = env.FERMI_BEARER_TOKEN
-			if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
+			if (!token || !timingSafeEqual(auth, `Bearer ${token}`))
+				return new Response('Unauthorized', { status: 401 })
 			const { getCloudAgent, listBoxes, listCloudAgents, routeHealth, withBoxHeartbeat } =
 				await import('./lib/fleet-store.ts')
 			const { listTasks } = await import('./lib/task-store.ts')
@@ -284,7 +292,8 @@ const defaultHandler = {
 		if (url.pathname === '/admin/tasks/pending' && request.method === 'GET') {
 			const auth = request.headers.get('authorization') ?? ''
 			const token = env.FERMI_BEARER_TOKEN
-			if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
+			if (!token || !timingSafeEqual(auth, `Bearer ${token}`))
+				return new Response('Unauthorized', { status: 401 })
 			const queue = url.searchParams.get('queue') || undefined
 			return Response.json({ pending: await countPendingTasks(env.FERMI_DB, queue) })
 		}
@@ -292,7 +301,8 @@ const defaultHandler = {
 		if (url.pathname === '/capabilities') {
 			const auth = request.headers.get('authorization') ?? ''
 			const token = env.FERMI_BEARER_TOKEN
-			if (!token || auth !== `Bearer ${token}`) return new Response('Unauthorized', { status: 401 })
+			if (!token || !timingSafeEqual(auth, `Bearer ${token}`))
+				return new Response('Unauthorized', { status: 401 })
 			registerAllCapabilities()
 			const registry = getCapabilityRegistry().map((c) => ({
 				name: c.name,
@@ -374,7 +384,7 @@ const defaultHandler = {
 		}
 		if (url.pathname === '/admin/session/state' && request.method === 'GET') {
 			const auth = request.headers.get('authorization') ?? ''
-			if (!env.FERMI_BEARER_TOKEN || auth !== `Bearer ${env.FERMI_BEARER_TOKEN}`)
+			if (!env.FERMI_BEARER_TOKEN || !timingSafeEqual(auth, `Bearer ${env.FERMI_BEARER_TOKEN}`))
 				return new Response('Unauthorized', { status: 401 })
 			const name = url.searchParams.get('name')
 			if (!name) return Response.json({ ok: false, error: 'name required' }, { status: 400 })
