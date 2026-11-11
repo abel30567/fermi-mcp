@@ -1,6 +1,7 @@
 import puppeteer, { type Browser, type Page, type CookieParam } from '@cloudflare/puppeteer'
 import { z } from 'zod'
 import { hashArgs, writeAudit } from './audit.ts'
+import { isPrivateAddress, resolvesToPrivate } from './host-guard.ts'
 import { type SecretScope, getSecret } from './secrets-store.ts'
 
 // ---------------------------------------------------------------------------
@@ -81,15 +82,28 @@ export type BrowserActionInputType = z.infer<typeof BrowserActionInput>
 
 const SECRET_PATTERN = /\{\{secret:([a-zA-Z0-9._-]+)(?:\|scope=(session|app|user))?\}\}/g
 
+// `targetUrl` is where the plaintext will go: the current page, or a cookie's url/domain.
+// Substitution is refused unless every secret lists that host in allowed_hosts.
 async function resolveSecrets(
 	text: string,
-	pageUrl: string,
+	targetUrl: string,
 	env: Env,
 ): Promise<{ resolved: string; secretNames: string[] }> {
 	if (!text.includes('{{sec' + 'ret:')) return { resolved: text, secretNames: [] }
 
 	const matches = Array.from(text.matchAll(SECRET_PATTERN))
 	if (matches.length === 0) return { resolved: text, secretNames: [] }
+
+	let target: URL | null = null
+	try {
+		target = new URL(targetUrl)
+	} catch {}
+	if (!target || (target.protocol !== 'https:' && target.protocol !== 'http:')) {
+		throw new Error(`Refusing secret substitution: target "${targetUrl}" is not an http(s) page`)
+	}
+	if (isPrivateAddress(target.hostname)) {
+		throw new Error(`Refusing secret substitution: "${target.host}" is a private address`)
+	}
 
 	let out = text
 	const secretNames: string[] = []
@@ -104,11 +118,19 @@ async function resolveSecrets(
 		if (allowed.length > 0 && !allowed.includes('browser_action')) {
 			throw new Error(`Secret "${secretName}" is not allowed for capability "browser_action"`)
 		}
+		if (!rec.metadata.allowed_hosts.includes(target.host)) {
+			throw new Error(
+				`Secret "${secretName}" is not approved for host "${target.host}" (use secret_approve_host)`,
+			)
+		}
 
 		out = out.replaceAll(m[0], rec.value)
 		secretNames.push(secretName)
 	}
 
+	if (await resolvesToPrivate(target.hostname)) {
+		throw new Error(`Refusing secret substitution: "${target.host}" resolves to a private address`)
+	}
 	return { resolved: out, secretNames }
 }
 
@@ -209,9 +231,15 @@ export async function executeAction(
 				for (const c of action.cookies as unknown as Record<string, unknown>[]) {
 					const resolved: Record<string, unknown> = { ...c }
 					if (typeof c.value === 'string') {
+						const target =
+							typeof c.url === 'string'
+								? c.url
+								: typeof c.domain === 'string'
+									? `https://${c.domain.replace(/^\./, '')}/`
+									: pageUrl
 						const { resolved: val, secretNames } = await resolveSecrets(
 							c.value as string,
-							pageUrl,
+							target,
 							env,
 						)
 						resolved.value = val

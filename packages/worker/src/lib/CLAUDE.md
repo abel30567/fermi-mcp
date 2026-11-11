@@ -27,6 +27,7 @@ Core utilities and data stores used across the worker.
 - **rrf.ts** — Reciprocal Rank Fusion: merges FTS5 + Vectorize results
 - **frontmatter.ts** — SKILL.md YAML frontmatter parser
 - **shell-blocklist.ts** — Dangerous command pattern matching
+- **host-guard.ts** — Private/loopback IP literal check + best-effort DoH resolve check for secret destinations
 - **crypto.ts** — Encryption helpers for secrets vault
 - **mime-types.ts** — File extension to MIME type mapping
 

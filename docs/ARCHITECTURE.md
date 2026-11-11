@@ -312,7 +312,15 @@ Two ways a secret reaches a request:
 
 1. **Gateway injection** — `{{secret:NAME}}` placeholders in `fetch_url` (and in
    browser `type`/cookie actions) are expanded by the gateway. The model never sees
-   the plaintext, and the target host must be on `allowed_hosts`.
+   the plaintext, and the target host must be on `allowed_hosts`. For browser
+   actions the target is the current page (or a cookie's `url`/`domain`). The
+   gateway follows redirects itself and re-validates every hop: a cross-origin hop
+   drops `Authorization`, `Proxy-Authorization`, `Cookie` and every header that
+   carried a placeholder, and a 307/308 that would replay a secret body to another
+   origin is refused. Private/loopback IP literals (and `localhost`) are always
+   refused (`src/lib/host-guard.ts`). A best-effort DNS-over-HTTPS check also
+   refuses a secret-bearing request whose name resolves to a private address; it
+   cannot stop DNS rebinding and lets the request through if the resolver fails.
 2. **`secret_resolve`** — for in-sandbox crypto (SRP, HMAC, JWT signing) the
    decrypted value can be pulled into the sandbox, but **only** if the secret lists
    `secret_resolve` in its `allowed_capabilities`. Rate-limited to 10 calls/min per
