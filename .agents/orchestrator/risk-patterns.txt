@@ -1,0 +1,19 @@
+# risk-patterns.txt — one regex per line, matched against changed file paths.
+# A PR touching any of these (or more than MAX_CODE_FILES code files) is RISKY and needs an
+# independent [BLAST-RADIUS] SAFE before it can merge. Lines starting with # are ignored.
+(^|/)package\.json$
+(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Pipfile\.lock|go\.sum|Cargo\.lock|Gemfile\.lock)$
+(^|/)Dockerfile
+^\.github/
+^\.agents/
+^\.claude/
+(^|/)migrations?/
+(^|/)(auth|security|permissions?)/
+(^|/)(tsconfig|vite\.config|webpack\.config|babel\.config)
+cache
+# Add your hot spots: the global stylesheet, the router, shared hooks, the main server file, ...
+packages/worker/src/index\.ts$
+packages/worker/src/lib/tool\.ts$
+packages/worker/src/mcp/register-tools\.ts$
+packages/worker/wrangler.*\.jsonc$
+(^|/)bun\.lock$

@@ -1,5 +1,10 @@
 import { DurableObject } from 'cloudflare:workers'
 
+interface ThrottleWindow {
+	count: number
+	reset_at: number
+}
+
 interface Reservation {
 	est_cost_usd: number
 	at: number
@@ -56,6 +61,7 @@ export class FleetDO extends DurableObject {
 		if (url.pathname === '/reserve') return this.reserve(await request.json())
 		if (url.pathname === '/release') return this.release(await request.json())
 		if (url.pathname === '/state') return Response.json(await this.snapshot())
+		if (url.pathname === '/throttle') return this.throttle(await request.json())
 		return new Response('Not Found', { status: 404 })
 	}
 
@@ -109,6 +115,22 @@ export class FleetDO extends DurableObject {
 		})
 	}
 
+	/** Fixed-window attempt counter; serialized so concurrent hits cannot all read the same count. */
+	async throttle(input: { key: string; max: number; window_s: number }): Promise<Response> {
+		return this.ctx.blockConcurrencyWhile(async () => {
+			const now = Date.now()
+			const windows =
+				((await this.ctx.storage.get('throttle')) as Record<string, ThrottleWindow>) ?? {}
+			for (const [k, w] of Object.entries(windows)) if (now >= w.reset_at) delete windows[k]
+			const w = windows[input.key] ?? { count: 0, reset_at: now + input.window_s * 1000 }
+			if (w.count >= input.max) return Response.json({ allowed: false })
+			w.count++
+			windows[input.key] = w
+			await this.ctx.storage.put('throttle', windows)
+			return Response.json({ allowed: true })
+		})
+	}
+
 	async snapshot(): Promise<{
 		active: number
 		reserved_usd: number
@@ -156,4 +178,19 @@ export async function fleetRelease(env: Env, agentId: string): Promise<void> {
 	await fleetStub(env)
 		?.fetch('https://do/release', { method: 'POST', body: JSON.stringify({ agent_id: agentId }) })
 		.catch(() => {})
+}
+
+/** Atomic per-key attempt throttle on a dedicated FleetDO instance (single writer). */
+export async function throttleHit(
+	env: Env,
+	key: string,
+	max: number,
+	windowS: number,
+): Promise<boolean> {
+	const ns = (env as unknown as { FLEET_DO: DurableObjectNamespace }).FLEET_DO
+	const res = await ns.get(ns.idFromName('throttle')).fetch('https://do/throttle', {
+		method: 'POST',
+		body: JSON.stringify({ key, max, window_s: windowS }),
+	})
+	return ((await res.json()) as { allowed: boolean }).allowed
 }

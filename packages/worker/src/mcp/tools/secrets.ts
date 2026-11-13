@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isSecretGrantedToBox } from '../../lib/secret-grants.ts'
 import {
 	type SecretScope,
 	addAllowedHost,
@@ -126,7 +127,7 @@ export function registerSecretTools(agent: FermiMCP) {
 	defineTool(agent, {
 		name: 'secret_resolve',
 		description:
-			'Resolve a decrypted secret value (for local crypto like SRP/HMAC/JWT signing). The secret must list "secret_resolve" in its allowed_capabilities. Rate-limited to 10 calls/min.',
+			'Resolve a decrypted secret value (for local crypto like SRP/HMAC/JWT signing). The secret must list "secret_resolve" in its allowed_capabilities; box sessions also need a grant for their box or mission. Rate-limited to 10 calls/min.',
 		schema: {
 			name: z.string().min(1).max(128).describe('Secret name'),
 			scope: scopeEnum.default('app').describe('Visibility scope'),
@@ -141,6 +142,24 @@ export function registerSecretTools(agent: FermiMCP) {
 		mutates: false,
 		handler: async (args, env) => {
 			const sessionId = agent.state?.sessionId ?? ''
+			if (
+				agent.principal === 'box' &&
+				!(await isSecretGrantedToBox(
+					env.FERMI_DB,
+					agent.boxId,
+					args.name,
+					args.scope as SecretScope,
+				))
+			) {
+				return {
+					content: [
+						{
+							type: 'text' as const,
+							text: JSON.stringify({ error: 'not_granted', name: args.name }),
+						},
+					],
+				}
+			}
 			const secret = await getSecret(args.name, args.scope as SecretScope, sessionId, env)
 			if (!secret) {
 				return {

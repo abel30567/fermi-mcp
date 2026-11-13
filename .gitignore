@@ -27,3 +27,7 @@ context/
 .mcp.json
 .playwright-mcp/
 .DS_Store
+
+# orchestrator: personal settings
+.agents/orchestrator/local.env
+__pycache__/

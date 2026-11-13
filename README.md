@@ -47,12 +47,12 @@ One server, one memory, one permission spine — the host changes, the agent doe
 ```
 
 - **Worker** (`src/index.ts`) routes MCP (`/mcp`, `/sse`), channels, OAuth, the
-  `/apps/*` host, the canvas WebSocket, and cron dispatch. When `FERMI_AUTH_ENABLED`
-  is `true`, an OAuth provider gates the MCP transports; otherwise they are open.
+  `/apps/*` host, the canvas WebSocket, and cron dispatch. An OAuth provider gates the
+  MCP transports unless `FERMI_LOCAL_DEV` is exactly `true` (local dev only).
 - **Durable Objects**: `FermiMCP` (the agent, SQLite-backed), `LiveCanvasDO`,
   `SandboxStorageDO`, `BrowserSessionDO`.
 - **Storage**: D1 (memory, sessions/messages + FTS5, audit, hooks, skills metadata,
-  secrets metadata, oauth), R2 (skills, files, apps), KV (config, approval tokens),
+  secrets metadata, oauth, approval tokens), R2 (skills, files, apps), KV (config),
   Workers AI (embeddings + summaries), Vectorize (semantic index).
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full diagram and data flow.
@@ -109,9 +109,28 @@ wrangler deploy --var FERMI_AUTH_ENABLED:true
 ```
 
 > ⚠️ Deploy with `FERMI_AUTH_ENABLED:true` (or set it in `wrangler.jsonc` `vars`).
-> Without it the MCP transports are **completely unauthenticated** on a public
-> `workers.dev` URL — anyone who finds it can read your memories, resolve your
-> stored secrets, and run code. Open mode is for `wrangler dev` only.
+> It gates the `/apps/*` pages; the MCP transports are behind OAuth regardless. Never
+> set `FERMI_LOCAL_DEV` on a deployment: it makes the MCP transports **completely
+> unauthenticated** on a public `workers.dev` URL — anyone who finds it can read your
+> memories, resolve your stored secrets, and run code. Open mode is for `wrangler dev` only.
+
+**Deploying from GitHub Actions.** `.github/workflows/deploy.yml` deploys `master` after CI
+passes. It renders `wrangler.jsonc` with `scripts/render-wrangler.mjs` from the `production`
+environment (secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID`,
+`KV_FERMI_ID`, `KV_OAUTH_ID`; vars: `WORKER_NAME`, `D1_DATABASE_NAME`, `R2_BUCKET_NAME`,
+`VECTORIZE_INDEX_NAME`, `FERMI_PUBLIC_URL`), applies D1 migrations, deploys with
+`FERMI_AUTH_ENABLED:true`, then smoke-tests `/health`, `/mcp` and the OAuth host. Without
+`CLOUDFLARE_API_TOKEN` the deploy job is skipped. Check your values locally with
+`node scripts/render-wrangler.mjs --check`.
+
+**Agent evals on worker PRs.** `.github/workflows/evals.yml` runs fermi-daemon's PR smoke
+(`abel30567/fermi-daemon@main`, `scripts/evals-ci.sh` with `evals/smoke.json`, k=3, the baseline
+harness) against the PR's head as the eval worker. It runs on `ready_for_review` and every later
+push of a non-draft, same-repo PR that touches `packages/worker/src/**` or
+`packages/worker/seeds/**`; a newer push cancels the older run. It posts the summary and a
+per-scenario pass table (`scripts/evals-scenarios.mjs`; never transcripts) as a PR comment and sets
+the commit status `evals/smoke`. The token is the `evals` environment's `CLAUDE_CODE_OAUTH_TOKEN`
+secret, passed on a file descriptor as in fermi-daemon; without it the run is skipped.
 
 Then seed the bundled skills and confirm the capability registry:
 
@@ -137,8 +156,60 @@ bun run dev            # wrangler dev --local
 bun run check          # Biome lint + format check
 bun run format         # auto-format
 bun run migrate:local  # apply D1 migrations locally
-bun run test           # vitest (worker package)
+bun run test           # private scan, script tests, vitest (worker): unit + MCP contract
 ```
+
+`bun run test` starts with `scripts/private-scan.mjs`, which fails on any git-tracked
+E.164 or formatted phone number, WhatsApp JID or LID, or phone-looking `chat_id`/`sender`
+that is not a placeholder (`5555550xxx`, `1555555xxxx`, `10000000000000`, `20000000000000`). It also
+applies one regex per line from the untracked `~/.config/fermi/private-patterns` (or
+`$FERMI_PRIVATE_PATTERNS`) when that file exists, and names only file, line and kind.
+
+### Running the eval target
+
+`packages/worker/wrangler.eval.jsonc` runs the real worker fully locally for the live
+harness evals: no Cloudflare login, no remote ids, and auth off via `"FERMI_LOCAL_DEV": "true"`
+in its `vars`. It is the only committed wrangler config allowed to set that bypass
+(`scripts/wrangler-configs.test.mjs` fails if any other, including `wrangler.template.jsonc`,
+does) and it is never deployed. Outbound APIs are pointed
+at local fakes with `SLACK_API_BASE`, `TELEGRAM_API_BASE`, `DISCORD_API_BASE`,
+`TWILIO_API_BASE` and `ANTHROPIC_API_BASE` (unset means the real service).
+`MACOS_MCP_URL` and any tokens come from the same env file.
+
+```bash
+cd packages/worker
+cat > /tmp/fermi-eval.env <<EOF
+SLACK_API_BASE=http://127.0.0.1:9101
+SLACK_BOT_TOKEN=xoxb-fake
+MACOS_MCP_URL=http://127.0.0.1:9102
+EOF
+STATE=/tmp/fermi-eval/state
+wrangler dev --local --config wrangler.eval.jsonc --port 8787 --persist-to $STATE \
+  --env-file /tmp/fermi-eval.env &
+node scripts/eval-seed.mjs test/fixtures/eval/sample.json --persist-to $STATE \
+  --url http://127.0.0.1:8787
+# ... run the eval against http://127.0.0.1:8787/mcp ...
+node scripts/eval-dump.mjs --persist-to $STATE > dump.json
+```
+
+`eval-seed` applies the D1 migrations, then replaces the profile, memories, allowlist
+and tasks with the fixture's. A `conversation` block (`{ channel, chat_id, sender?,
+history: [{ role, text, minutes_ago }] }`, see `test/fixtures/eval/history.json`)
+replaces that chat's transcript with the same `sessions`/`messages` rows the channel
+gateways write, each turn dated `minutes_ago` before seed time, so `context_bootstrap`,
+`conversation_history` and `session_search` return it. With `sender`, user turns get
+the group attribution prefix (`[sender] text`). It writes each fixture skill (`{ slug, body, metadata? }`)
+by calling the real `skill_set` tool on the running worker's `/mcp`, which needs no OAuth
+because `wrangler.eval.jsonc` sets `FERMI_LOCAL_DEV=true`.
+Channel bindings, such as the Slack finance channel mapping to `household-finance`, are
+daemon prompt rules rather than worker state, so a fixture only seeds the skill and the
+allowlist.
+
+`eval-dump` prints profile, memories, allowlist, tasks, conversation messages (with
+their chat `host`), outbox, schedules, skill metadata
+and audit as JSON. It reads D1 only. Phone calls are kept in each `PhoneCallDO`, not in
+D1, so evals assert on them from the fake Twilio log (via `TWILIO_API_BASE`) and the
+harness trace.
 
 ## Configuration
 
@@ -155,10 +226,10 @@ Secrets are set with `wrangler secret put` (values entered interactively):
 | `MACOS_MCP_URL`, `MACOS_MCP_TOKEN` | optional | Local macOS bridge (enables the `mac_*` tools) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `OPENAI_API_KEY`, `FERMI_PUBLIC_URL` | for phone calls | Outbound calls. Read from the Fermi secrets store (`secret_set`, scope `app`) first, then from Worker vars/secrets of the same name |
 
-Auth mode is controlled by the `FERMI_AUTH_ENABLED` var. Set it to `true` to put the
-MCP transports behind OAuth — recommended for every deployed instance. Leaving it
-unset serves `/mcp` and `/sse` with no authentication, which is only appropriate for
-local `wrangler dev`.
+The MCP transports are behind OAuth by default: with no auth vars set, `/mcp` and `/sse`
+return 401 without a token. Only `FERMI_LOCAL_DEV=true` (exactly that value; never in a
+deployed config) serves them with no authentication, for local `wrangler dev`. Also set
+`FERMI_AUTH_ENABLED=true` on deployments: it gates the `/apps/*` pages.
 
 In OAuth mode, connecting hosts self-register and land on Fermi's consent screen,
 which validates your owner secret and (once enrolled via `totp_setup`) a TOTP code:

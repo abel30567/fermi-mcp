@@ -5,6 +5,7 @@ import {
 	listOauthClients,
 	putOauthClient,
 } from '../../lib/oauth-store.ts'
+import { publicBaseUrl } from '../../lib/public-url.ts'
 import { defineTool } from '../../lib/tool.ts'
 import type { FermiMCP } from '../index.ts'
 
@@ -104,10 +105,7 @@ export function registerOauthTools(agent: FermiMCP) {
 		risk: 'low',
 		mutates: false,
 		handler: async (args, env) => {
-			const baseUrl =
-				env.FERMI_ENV === 'development'
-					? 'http://localhost:8787'
-					: 'https://fermi.example.workers.dev'
+			const baseUrl = publicBaseUrl(env)
 			const client = await getOauthClient(args.name, env)
 			if (!client) {
 				return {

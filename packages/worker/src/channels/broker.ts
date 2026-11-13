@@ -1,3 +1,4 @@
+import { timingSafeEqual } from '../lib/crypto.ts'
 import { getCloudAgent } from '../lib/fleet-store.ts'
 import { claimTasks, completeTask, enqueueTask, waitForTask } from '../lib/task-store.ts'
 import { getWebSessionMeta } from '../lib/web-session-store.ts'
@@ -124,7 +125,9 @@ export async function handleBoxBrowserRpcWait(request: Request, env: Env): Promi
 
 function adminAuthorized(request: Request, env: Env): boolean {
 	const auth = request.headers.get('authorization') ?? ''
-	return Boolean(env.FERMI_BEARER_TOKEN) && auth === `Bearer ${env.FERMI_BEARER_TOKEN}`
+	return (
+		Boolean(env.FERMI_BEARER_TOKEN) && timingSafeEqual(auth, `Bearer ${env.FERMI_BEARER_TOKEN}`)
+	)
 }
 
 export async function handleBrokerClaim(request: Request, env: Env): Promise<Response> {

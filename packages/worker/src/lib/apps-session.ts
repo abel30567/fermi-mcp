@@ -1,3 +1,5 @@
+import { sha256Hex } from '../channels/box-gateway.ts'
+
 const COOKIE_NAME = 'fermi_apps_session'
 const SESSION_TTL_S = 60 * 60 * 24
 const KV_PREFIX = 'apps_session:'
@@ -6,6 +8,11 @@ function toBase64Url(bytes: Uint8Array): string {
 	let bin = ''
 	for (const b of bytes) bin += String.fromCharCode(b)
 	return btoa(bin).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
+}
+
+/** KV key for a session: SHA-256 of the token, so a KV read never yields a usable credential. */
+async function sessionKey(token: string): Promise<string> {
+	return `${KV_PREFIX}${await sha256Hex(token)}`
 }
 
 export interface IssuedSession {
@@ -17,7 +24,7 @@ export async function issueSession(env: Env): Promise<IssuedSession> {
 	const random = crypto.getRandomValues(new Uint8Array(32))
 	const token = toBase64Url(random)
 	const expiresAt = Math.floor(Date.now() / 1000) + SESSION_TTL_S
-	await env.FERMI_KV.put(`${KV_PREFIX}${token}`, String(expiresAt), {
+	await env.FERMI_KV.put(await sessionKey(token), String(expiresAt), {
 		expirationTtl: SESSION_TTL_S,
 	})
 	return { token, expiresAt }
@@ -25,13 +32,13 @@ export async function issueSession(env: Env): Promise<IssuedSession> {
 
 export async function validateSession(token: string, env: Env): Promise<boolean> {
 	if (!token) return false
-	const entry = await env.FERMI_KV.get(`${KV_PREFIX}${token}`)
+	const entry = await env.FERMI_KV.get(await sessionKey(token))
 	return entry !== null
 }
 
 export async function revokeSession(token: string, env: Env): Promise<void> {
 	if (!token) return
-	await env.FERMI_KV.delete(`${KV_PREFIX}${token}`)
+	await env.FERMI_KV.delete(await sessionKey(token))
 }
 
 export function buildSessionCookie(token: string): string {

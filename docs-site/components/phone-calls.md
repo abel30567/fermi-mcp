@@ -49,7 +49,7 @@ Store these with `secret_set` (scope `app`) from any connected host — no redep
 |------|-------|
 | `TWILIO_ACCOUNT_SID` | Twilio Account SID |
 | `TWILIO_AUTH_TOKEN` | Twilio Auth Token |
-| `TWILIO_FROM_NUMBER` | caller ID in E.164 form, for example `+15551230000` |
+| `TWILIO_FROM_NUMBER` | caller ID in E.164 form, for example `+15555550100` |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `FERMI_PUBLIC_URL` | the Worker's public origin, for example `https://fermi.example.workers.dev`. Twilio must be able to reach it. |
 | `OPENAI_LIVE_MODEL` | optional, default `gpt-live-1` |

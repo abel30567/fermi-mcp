@@ -59,8 +59,8 @@ capability; the macOS `mac_*` tools are MCP-only.
   ┌──────────────────────────────────────────────────────────────────────┐
   │                        Cloudflare Worker (src/index.ts)               │
   │                                                                      │
-  │  Auth gate:  FERMI_AUTH_ENABLED=true → OAuthProvider wraps /mcp,/sse  │
-  │              otherwise  → open (no transport auth)                    │
+  │  Auth gate:  OAuthProvider wraps /mcp,/sse (default)                  │
+  │              FERMI_LOCAL_DEV=true → open (local dev only)             │
   │                                                                      │
   │  Routes: /mcp /sse  /oauth/* /apps/*  /tg/webhook /slack/events       │
   │          /canvas/:id  /health  /capabilities (admin, Bearer)          │
@@ -91,12 +91,14 @@ sandboxed code never gets a raw `fetch`.
 
 ## Request entry points (`src/index.ts`)
 
-The default export branches on `FERMI_AUTH_ENABLED`:
+The default export branches on `bypassAuth()` (`src/lib/auth-mode.ts`):
 
-- **`!== "true"`** — requests go straight to `defaultHandler`. `/mcp` and `/sse` are
-  served with **no transport authentication**. This is the local-dev / trusted-network
-  default.
-- **`=== "true"`** — requests go through `@cloudflare/workers-oauth-provider`, which
+- **`FERMI_LOCAL_DEV === "true"`** — requests go straight to `defaultHandler`. `/mcp` and
+  `/sse` are served with **no transport authentication**. Local dev only. Exception: with
+  `FERMI_AUTH_ENABLED === "true"` too, a request carrying an `Authorization` header still
+  goes through the OAuth provider.
+- **otherwise (default, including unset or mistyped values)** — requests go through
+  `@cloudflare/workers-oauth-provider`, which
   gates `/mcp` and `/sse` behind an OAuth flow. The consent screen
   (`src/lib/oauth-handlers.ts`) validates `FERMI_OWNER_SECRET` and, if configured, a
   TOTP code.
@@ -134,14 +136,17 @@ The guardrail pipeline, in order:
       ▼
   1. PLAN-MODE CHECK
      If agent mode == "plan" and tool mutates and tool is not
-     {plan_draft, plan_approve, session_set_mode}  → denied (plan_mode_restricted)
+     {plan_draft, plan_approve, session_set_mode}  → audit "denied",
+                                                     denied (plan_mode_restricted)
       │
       ▼
   2. APPROVAL GATE  (only when risk == "high")
      No token  → mint UUID token, store {tool, args_hash} in KV (TTL 300s),
                  audit "pending", return pending_approval to the caller
-     Token     → must still exist in KV → delete it (single use) → continue
-                 (existence is checked; the stored args_hash is not re-compared)
+     Token     → must exist in KV AND its stored tool == this tool AND its
+                 stored args_hash == hash(args without approval_token);
+                 otherwise audit "denied", invalid_or_expired_token (the token
+                 is left in place). On a match: delete it (single use) → continue
       │
       ▼
   3. PRE-HOOKS  ("tool:before")
@@ -155,9 +160,10 @@ The guardrail pipeline, in order:
 
 Notes on the real behaviour:
 
-- The approval gate keys on **token presence**, not on the arguments matching the
-  ones that produced the token. The `args_hash` is stored for audit, not re-verified
-  on redemption.
+- An approval token is **bound to the call that minted it**: the same tool with
+  identical arguments. Re-invoking with any changed argument, or presenting the
+  token to a different tool, is denied. Clients must re-send the original args
+  verbatim plus `approval_token`.
 - `execute` additionally screens its code through a shell blocklist
   (`src/lib/shell-blocklist.ts`) before anything runs.
 - Audit rows are the substrate for `usage_stats`, which aggregates call counts,
@@ -306,7 +312,15 @@ Two ways a secret reaches a request:
 
 1. **Gateway injection** — `{{secret:NAME}}` placeholders in `fetch_url` (and in
    browser `type`/cookie actions) are expanded by the gateway. The model never sees
-   the plaintext, and the target host must be on `allowed_hosts`.
+   the plaintext, and the target host must be on `allowed_hosts`. For browser
+   actions the target is the current page (or a cookie's `url`/`domain`). The
+   gateway follows redirects itself and re-validates every hop: a cross-origin hop
+   drops `Authorization`, `Proxy-Authorization`, `Cookie` and every header that
+   carried a placeholder, and a 307/308 that would replay a secret body to another
+   origin is refused. Private/loopback IP literals (and `localhost`) are always
+   refused (`src/lib/host-guard.ts`). A best-effort DNS-over-HTTPS check also
+   refuses a secret-bearing request whose name resolves to a private address; it
+   cannot stop DNS rebinding and lets the request through if the resolver fails.
 2. **`secret_resolve`** — for in-sandbox crypto (SRP, HMAC, JWT signing) the
    decrypted value can be pulled into the sandbox, but **only** if the secret lists
    `secret_resolve` in its `allowed_capabilities`. Rate-limited to 10 calls/min per
@@ -400,9 +414,9 @@ that step rather than fail.
 
 | Store | Binding | Holds |
 |-------|---------|-------|
-| D1 | `FERMI_DB` | memory, sessions, messages + `messages_fts`, audit log, hooks, `team_spawns`, skills metadata, secrets metadata, connectors, packages, retrievers, OAuth clients/grants |
+| D1 | `FERMI_DB` | memory, sessions, messages + `messages_fts`, audit log, hooks, `team_spawns`, skills metadata, secrets metadata, connectors, packages, retrievers, OAuth clients/grants, approval tokens |
 | R2 | `FERMI_BUCKET` | SKILL.md bodies, `fs_*` user files, `/apps/*` static assets, seeds |
-| KV | `FERMI_KV` | runtime config (daily-brief channel/chat), approval tokens, `team:max_concurrent`, allow-lists |
+| KV | `FERMI_KV` | runtime config (daily-brief channel/chat), `team:max_concurrent`, allow-lists |
 | KV | `OAUTH_KV` | OAuth tokens/grants for the provider |
 | Workers AI | `AI` | `bge-small-en-v1.5` embeddings; Llama 3.1-8B summaries and channel inference fallback |
 | Vectorize | `FERMI_VECTORIZE` | `capability:*` and `skill:*` vectors |

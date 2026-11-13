@@ -5,9 +5,15 @@ import {
 	monthSpendUsd,
 	resolveInstanceType,
 } from './fleet-config.ts'
-import { createCloudAgent, getBox } from './fleet-store.ts'
+import {
+	CLAUDE_ACCOUNT_RE,
+	claudeTokenSecretName,
+	createCloudAgent,
+	getBox,
+} from './fleet-store.ts'
 import { parseProofContract } from './proof-contract.ts'
 import { type ProvisionOutcome, dispatchProvision } from './provisioner.ts'
+import { getSecret } from './secrets-store.ts'
 import { enqueueTask } from './task-store.ts'
 
 export interface LaunchInput {
@@ -15,6 +21,8 @@ export interface LaunchInput {
 	proof_contract: string
 	route?: 'claude' | 'codex' | 'grok'
 	model?: string
+	/** Alternate Claude account (claude route only), e.g. 'kayo' → secret CLAUDE_CODE_OAUTH_TOKEN_KAYO. */
+	account?: string
 	box_id?: string
 	budget_usd?: number
 	ttl_seconds?: number
@@ -45,6 +53,20 @@ export async function launchCloudAgent(env: Env, input: LaunchInput): Promise<La
 	const proof = parseProofContract(input.proof_contract)
 	if (!proof.ok) {
 		return { ok: false, error: `invalid_proof_contract: ${proof.error}` }
+	}
+
+	// Fail at launch, not at box boot, when the account's token is missing.
+	if (input.account) {
+		if ((input.route ?? 'claude') !== 'claude') {
+			return { ok: false, error: 'account_requires_claude_route' }
+		}
+		if (!CLAUDE_ACCOUNT_RE.test(input.account)) {
+			return { ok: false, error: 'invalid_account', account: input.account }
+		}
+		const secretName = claudeTokenSecretName(input.account)
+		if (!(await getSecret(secretName, 'app', '', env))) {
+			return { ok: false, error: 'account_token_not_configured', missing: [secretName] }
+		}
 	}
 
 	const config = await getFleetConfig(env)
@@ -108,6 +130,7 @@ export async function launchCloudAgent(env: Env, input: LaunchInput): Promise<La
 		budgetUsd: input.budget_usd,
 		ttlSeconds: input.ttl_seconds,
 		instanceType: input.box_id ? undefined : sizing.instance_type,
+		account: input.account,
 	})
 	const provision = await dispatchProvision(env, created)
 	// If no compute was dispatched (provisioner error, not a targeted box), free

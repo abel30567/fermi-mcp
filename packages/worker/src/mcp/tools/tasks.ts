@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { fireQueueHook } from '../../lib/queue-hooks.ts'
 import {
 	claimTasks,
 	completeTask,
@@ -42,6 +43,9 @@ export function registerTaskTools(agent: FermiMCP) {
 				queue: args.queue,
 				parentTaskId: args.parent_task_id,
 			})
+			// Wake an external consumer (e.g. Grok Bot) without blocking the enqueue.
+			if (args.queue)
+				agent.waitUntil(fireQueueHook(env, { task_id: created.id, queue: args.queue }))
 			return { content: [{ type: 'text' as const, text: JSON.stringify(created) }] }
 		},
 	})

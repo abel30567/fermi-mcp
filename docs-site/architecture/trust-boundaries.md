@@ -4,7 +4,7 @@ Where credentials live, where they stop, and what each boundary is worth. Number
 
 ## Layer 1 — Transport auth into the Worker
 
-`FERMI_AUTH_ENABLED=true` wraps `/mcp`/`/sse` in OAuth (owner secret + optional TOTP at consent). Channel webhooks verify platform secrets. `/admin/*` demands the bearer token; `/box/*` demands a valid per-box token. *Enforcement: `src/index.ts`, `authBox` in `box-gateway.ts`.*
+`/mcp`/`/sse` are wrapped in OAuth (owner secret + optional TOTP at consent) unless `FERMI_LOCAL_DEV` is exactly `true` (local dev only). Channel webhooks verify platform secrets. `/admin/*` demands the bearer token; `/box/*` demands a valid per-box token. *Enforcement: `src/index.ts`, `authBox` in `box-gateway.ts`.*
 
 ## Layer 2 — The tool guardrail pipeline
 
@@ -24,7 +24,7 @@ Cookies decrypt only on the Mac executor. Boxes get handles; ops are launch-boun
 
 ## Layer 6 — Supply chain
 
-Boxes execute only a runner whose sha256 matches the operator-set pin; launch refuses unpinned; fetch failures and mismatches fail closed with telemetry. *Enforcement: `lib/runner-pin.ts` + tamper harness `test/shell/boot-pin-harness.sh`.*
+Boxes execute only a runner whose files all match the operator-set sha256 manifest; launch refuses unpinned; fetch failures and mismatches fail closed with telemetry. *Enforcement: `lib/runner-pin.ts` + tamper harness `test/shell/boot-pin-harness.sh`.*
 
 ## Layer 7 — Proof-of-work honesty
 

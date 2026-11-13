@@ -519,7 +519,7 @@ await mcp('initialize', {
 await mcp('notifications/initialized', {}, true)
 
 const args = {
-	to: '+18008291040',
+	to: '+15555550100',
 	goal: 'Request a first-time penalty abatement for the failure-to-file penalty on the 2024 tax year, and get a confirmation number.',
 	context:
 		'This is a test call. You are calling on behalf of Jordan Sample, a fictional taxpayer. Tax year: 2024. Callback number: 555-0100.',

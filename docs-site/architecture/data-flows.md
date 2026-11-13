@@ -20,7 +20,7 @@ sequenceDiagram
     DO-->>H: result
 ```
 
-State machine for a `risk: high` call: `no token → pending_approval (token minted, KV TTL 300s) → host retries with token → token deleted (single use) → executed`.
+State machine for a `risk: high` call: `no token → pending_approval (token minted, D1 row, TTL 300s) → host retries with token → token atomically deleted (single use) → executed`.
 
 ## 2. Channel message → reply
 

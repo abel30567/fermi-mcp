@@ -1,0 +1,25 @@
+{
+	"conversation": {
+		"channel": "tg",
+		"chat_id": "1000001",
+		"history": [
+			{
+				"role": "user",
+				"text": "Call the dentist and book a cleaning for next week.",
+				"minutes_ago": 25
+			},
+			{
+				"role": "assistant",
+				"text": "Calling Dr. Example at +15555550100 now. Shall I go ahead and dial?",
+				"minutes_ago": 24
+			},
+			{ "role": "user", "text": "Yes, go ahead.", "minutes_ago": 23 },
+			{
+				"role": "assistant",
+				"text": "The line was busy, so no appointment is booked yet.",
+				"minutes_ago": 20
+			},
+			{ "role": "user", "text": "Try the dentist again please.", "minutes_ago": 2 }
+		]
+	}
+}

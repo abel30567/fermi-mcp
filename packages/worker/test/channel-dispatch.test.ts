@@ -41,11 +41,33 @@ function interceptTelegramMedia() {
 function interceptSlack() {
 	fetchMock
 		.get('https://slack.com')
-		.intercept({ path: '/api/chat.postMessage', method: 'POST' })
+		.intercept({
+			path: '/api/chat.postMessage',
+			method: 'POST',
+			body: (b) => !b.includes('"channel":"CFAIL'),
+		})
 		.reply(200, (opts) => {
 			slackSent.push(JSON.parse(String(opts.body)) as { channel: string; text: string })
 			return { ok: true }
 		})
+		.persist()
+	fetchMock
+		.get('https://slack.com')
+		.intercept({
+			path: '/api/chat.postMessage',
+			method: 'POST',
+			body: (b) => b.includes('"channel":"CFAIL_OKFALSE"'),
+		})
+		.reply(200, { ok: false, error: 'channel_not_found' })
+		.persist()
+	fetchMock
+		.get('https://slack.com')
+		.intercept({
+			path: '/api/chat.postMessage',
+			method: 'POST',
+			body: (b) => b.includes('"channel":"CFAIL_HTTP"'),
+		})
+		.reply(500, 'upstream error')
 		.persist()
 }
 
@@ -81,12 +103,12 @@ describe('sendChannelMessage', () => {
 	})
 
 	it('routes wa to the outbox without any fetch', async () => {
-		await sendChannelMessage(workerEnv, 'wa', '15551234567', 'hi there')
+		await sendChannelMessage(workerEnv, 'wa', '15555550100', 'hi there')
 		expect(sent).toHaveLength(0)
 		const row = await env.FERMI_DB.prepare(
 			"SELECT chat_id, body, status FROM outbox WHERE channel = 'wa'",
 		).first<{ chat_id: string; body: string; status: string }>()
-		expect(row).toMatchObject({ chat_id: '15551234567', body: 'hi there', status: 'pending' })
+		expect(row).toMatchObject({ chat_id: '15555550100', body: 'hi there', status: 'pending' })
 	})
 
 	it('routes tg through the Telegram sendMessage API', async () => {
@@ -111,6 +133,17 @@ describe('sendChannelMessage', () => {
 		expect(slackSent[0]).toMatchObject({ channel: 'C123', text: 'slack hello' })
 		const row = await env.FERMI_DB.prepare("SELECT id FROM outbox WHERE channel = 'sl'").first()
 		expect(row).toBeNull()
+	})
+	it('throws when Slack answers ok:false instead of dropping the message', async () => {
+		await expect(sendChannelMessage(workerEnv, 'sl', 'CFAIL_OKFALSE', 'lost')).rejects.toThrow(
+			/channel_not_found/,
+		)
+	})
+
+	it('throws when Slack answers with a non-2xx status', async () => {
+		await expect(sendChannelMessage(workerEnv, 'sl', 'CFAIL_HTTP', 'lost')).rejects.toThrow(
+			/http 500/,
+		)
 	})
 
 	const OUT = '/Users/me/fermi-daemon/media/out'

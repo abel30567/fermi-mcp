@@ -15,6 +15,7 @@ Core utilities and data stores used across the worker.
 - **retrievers-store.ts** — Named D1 query templates
 - **oauth-store.ts** — OAuth token/code/client management
 - **canvas-store.ts** — Canvas state persistence
+- **canvas-auth.ts** — Canvas share tokens: issue (hashed, TTL, read|write), revoke, /canvas/* gate
 - **fs-store.ts** — R2 filesystem with scope checking
 - **capability-fts.ts** / **capability.ts** — Capability catalog + FTS indexing
 
@@ -27,7 +28,8 @@ Core utilities and data stores used across the worker.
 - **rrf.ts** — Reciprocal Rank Fusion: merges FTS5 + Vectorize results
 - **frontmatter.ts** — SKILL.md YAML frontmatter parser
 - **shell-blocklist.ts** — Dangerous command pattern matching
-- **crypto.ts** — Encryption helpers for secrets vault
+- **host-guard.ts** — Private/loopback IP literal check + best-effort DoH resolve check for secret destinations
+- **crypto.ts** — Encryption helpers for secrets vault; `timingSafeEqual` for every admin bearer / owner secret compare
 - **mime-types.ts** — File extension to MIME type mapping
 
 ## OAuth / Apps

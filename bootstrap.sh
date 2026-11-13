@@ -33,7 +33,14 @@ echo "Creating Vectorize index..."
 wrangler vectorize create "$WORKER_NAME-capabilities" --dimensions 768 --metric cosine 2>/dev/null || true
 
 echo "Generating $CONFIG..."
+# FERMI_PUBLIC_URL (optional env): public https origin; unset drops the var.
+if [ -n "${FERMI_PUBLIC_URL:-}" ]; then
+  PUBLIC_URL_EXPR="s|__FERMI_PUBLIC_URL__|$FERMI_PUBLIC_URL|g"
+else
+  PUBLIC_URL_EXPR="/__FERMI_PUBLIC_URL__/d"
+fi
 sed \
+  -e "$PUBLIC_URL_EXPR" \
   -e "s|__WORKER_NAME__|$WORKER_NAME|g" \
   -e "s|__CF_ACCOUNT_ID__|$CF_ACCOUNT_ID|g" \
   -e "s|__D1_DATABASE_NAME__|$WORKER_NAME|g" \

@@ -1,4 +1,4 @@
-const API = 'https://discord.com/api/v10'
+import { apiBase } from '../lib/api-base.ts'
 
 interface DiscordMessageRow {
 	author: string
@@ -10,7 +10,7 @@ interface DiscordMessageRow {
 async function discordGet(env: Env, path: string): Promise<unknown> {
 	const token = env.DISCORD_BOT_TOKEN
 	if (!token) throw new Error('DISCORD_BOT_TOKEN not configured')
-	const res = await fetch(`${API}${path}`, {
+	const res = await fetch(`${apiBase(env, 'DISCORD_API_BASE')}/api/v10${path}`, {
 		headers: { Authorization: `Bot ${token}` },
 	})
 	if (!res.ok) throw new Error(`discord ${res.status}: ${(await res.text()).slice(0, 120)}`)

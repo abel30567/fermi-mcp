@@ -6,6 +6,8 @@
 	"main": "./src/index.ts",
 	"rules": [{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true }],
 	"observability": { "enabled": true },
+	// /health reports this version id; the deploy smoke waits for it.
+	"version_metadata": { "binding": "CF_VERSION_METADATA" },
 	"d1_databases": [
 		{
 			"binding": "FERMI_DB",
@@ -45,5 +47,16 @@
 		{ "new_sqlite_classes": ["PhoneCallDO"], "tag": "v6" }
 	],
 	"triggers": { "crons": ["0 3 * * *", "0 8 * * *", "0 2 * * SUN", "0 */6 * * *", "*/5 * * * *"] },
-	"vars": { "FERMI_ENV": "development", "CF_ACCOUNT_ID": "__CF_ACCOUNT_ID__" }
+	"vars": {
+		// FERMI_PUBLIC_URL: public https origin of this deployment, used for canvas and OAuth links.
+		// bootstrap.sh drops this line when it is unset: http://localhost:8787 in development, else
+		// fermi.example.workers.dev. scripts/render-wrangler.mjs requires it.
+		"FERMI_PUBLIC_URL": "__FERMI_PUBLIC_URL__",
+		"FERMI_ENV": "development",
+		// Auth: /mcp and /sse always require OAuth here. The local-dev bypass var must never be set
+		// in this template or any deployed config (scripts/wrangler-configs.test.mjs enforces it);
+		// see "Choose an auth mode" in docs/USAGE.md for local dev. FERMI_AUTH_ENABLED ("true" in
+		// deploys) gates the /apps pages.
+		"CF_ACCOUNT_ID": "__CF_ACCOUNT_ID__"
+	}
 }

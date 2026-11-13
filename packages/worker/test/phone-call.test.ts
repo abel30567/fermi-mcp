@@ -5,6 +5,7 @@ import {
 	type PhoneConfig,
 	appendTranscript,
 	buildDialParams,
+	buildLiveInstructions,
 	buildLiveSession,
 	buildNotifyPayload,
 	buildSummaryRequest,
@@ -26,7 +27,7 @@ const config: PhoneConfig = {
 	twilioAccountSid: 'ACtest',
 	twilioAuthToken: 'token',
 	twilioApiBase: 'https://api.twilio.com',
-	fromNumber: '+15550001111',
+	fromNumber: '+15555550111',
 	openaiApiKey: 'sk',
 	publicUrl: 'https://fermi.example.workers.dev',
 	liveModel: 'gpt-live-1',
@@ -37,7 +38,7 @@ const config: PhoneConfig = {
 function record(overrides: Partial<CallRecord> = {}): CallRecord {
 	return {
 		id: 'call-1',
-		to: '+18005551212',
+		to: '+15555550123',
 		from: config.fromNumber,
 		goal: 'Ask for a penalty abatement',
 		context: null,
@@ -86,7 +87,7 @@ describe('phone config', () => {
 		const values: Record<string, string> = {
 			TWILIO_ACCOUNT_SID: 'ACtest',
 			TWILIO_AUTH_TOKEN: 'token',
-			TWILIO_FROM_NUMBER: '+15550001111',
+			TWILIO_FROM_NUMBER: '+15555550111',
 			OPENAI_API_KEY: 'sk',
 			FERMI_PUBLIC_URL: 'https://fermi.example.workers.dev/',
 		}
@@ -99,7 +100,7 @@ describe('phone config', () => {
 		expect(result.config).toMatchObject({
 			twilioAccountSid: 'ACtest',
 			twilioApiBase: 'https://api.twilio.com',
-			fromNumber: '+15550001111',
+			fromNumber: '+15555550111',
 			publicUrl: 'https://fermi.example.workers.dev',
 			liveModel: 'gpt-live-1',
 			backendModel: 'gpt-6-luna',
@@ -123,12 +124,12 @@ describe('twilio helpers', () => {
 		const params = buildDialParams({
 			config,
 			callId: 'call-1',
-			to: '+18005551212',
+			to: '+15555550123',
 			streamToken: 'tok',
 			maxSeconds: 5400,
 		})
-		expect(params.get('To')).toBe('+18005551212')
-		expect(params.get('From')).toBe('+15550001111')
+		expect(params.get('To')).toBe('+15555550123')
+		expect(params.get('From')).toBe('+15555550111')
 		expect(params.get('Twiml')).toBe(streamTwiml(config, 'call-1', 'tok'))
 		expect(params.get('StatusCallback')).toBe(
 			'https://fermi.example.workers.dev/phone/webhook?call=call-1',
@@ -167,24 +168,25 @@ describe('twilio helpers', () => {
 	})
 
 	it('verifies the Twilio webhook signature and rejects tampering', async () => {
-		// Worked example from Twilio's webhook security documentation.
+		// Twilio's webhook security worked example, with placeholder numbers; the signature is
+		// HMAC-SHA1(authToken, url + sorted name/value pairs), base64.
 		const authToken = '12345'
 		const url = 'https://mycompany.com/myapp.php?foo=1&bar=2'
 		const params = new URLSearchParams({
 			CallSid: 'CA1234567890ABCDE',
-			Caller: '+12349013030',
+			Caller: '+15555550110',
 			Digits: '1234',
-			From: '+12349013030',
-			To: '+18005551212',
+			From: '+15555550110',
+			To: '+15555550123',
 		})
-		const signature = '0/KCTR6DLpKmkAf8muzZqo1nDgQ='
+		const signature = 'pkkD4v5KYaYqcsiOVSLmntmBu2k='
 		expect(await verifyTwilioSignature({ authToken, signature, url, params })).toBe(true)
 		// field order in the body must not matter
 		const shuffled = new URLSearchParams([...params.entries()].reverse())
 		expect(await verifyTwilioSignature({ authToken, signature, url, params: shuffled })).toBe(true)
 
 		const tampered = new URLSearchParams(params)
-		tampered.set('To', '+18005550000')
+		tampered.set('To', '+15555550124')
 		expect(await verifyTwilioSignature({ authToken, signature, url, params: tampered })).toBe(false)
 		expect(await verifyTwilioSignature({ authToken, signature, url: `${url}&x=1`, params })).toBe(
 			false,
@@ -307,6 +309,16 @@ describe('call record helpers', () => {
 		])
 	})
 
+	it("introduces the voice agent as an assistant calling on the user's behalf", () => {
+		const instructions = buildLiveInstructions(record())
+		expect(instructions).toContain("an assistant calling on the user's behalf")
+		// The sentence the agent is told to introduce itself with, before the "—" guard clause.
+		const intro = /Introduce yourself[^—.]*/.exec(instructions)?.[0] ?? ''
+		expect(intro).toBe("Introduce yourself simply as an assistant calling on the user's behalf ")
+		expect(intro).not.toContain('AI assistant')
+		expect(instructions).toContain('do not call yourself an AI assistant when introducing yourself')
+	})
+
 	it('builds a GPT-Live session with PCMU pass-through and the call tools', () => {
 		const session = buildLiveSession(record(), config)
 		expect(session.model).toBe('gpt-live-1')
@@ -345,7 +357,7 @@ describe('call record helpers', () => {
 		})
 		appendTranscript(done.transcript, 'agent', 'Goodbye.', 1_290_000)
 		const payload = buildNotifyPayload(done)
-		expect(payload).toContain('[Phone call call-1 to +18005551212 ended — outcome: success]')
+		expect(payload).toContain('[Phone call call-1 to +15555550123 ended — outcome: success]')
 		expect(payload).toContain('Summary: Abatement approved, ref 12345.')
 		expect(payload).toContain('300s total, 95s with the voice model, 2 hold period(s)')
 		expect(payload).toContain('+280s agent: Goodbye.')

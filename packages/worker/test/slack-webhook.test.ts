@@ -24,11 +24,24 @@ const slackSent: SlackSend[] = []
 function interceptSlack() {
 	fetchMock
 		.get('https://slack.com')
-		.intercept({ path: '/api/chat.postMessage', method: 'POST' })
+		.intercept({
+			path: '/api/chat.postMessage',
+			method: 'POST',
+			body: (b) => !b.includes('"channel":"DFAIL'),
+		})
 		.reply(200, (opts) => {
 			slackSent.push(JSON.parse(String(opts.body)) as SlackSend)
 			return { ok: true }
 		})
+		.persist()
+	fetchMock
+		.get('https://slack.com')
+		.intercept({
+			path: '/api/chat.postMessage',
+			method: 'POST',
+			body: (b) => b.includes('"channel":"DFAIL'),
+		})
+		.reply(200, { ok: false, error: 'channel_not_found' })
 		.persist()
 }
 
@@ -57,8 +70,10 @@ describe('handleSlackBridgeWebhook', () => {
 		await clearTasks()
 		await clearSessions()
 		await clearAllowlist()
-		const { keys } = await env.FERMI_KV.list({ prefix: 'pairing:' })
-		await Promise.all(keys.map((k) => env.FERMI_KV.delete(k.name)))
+		for (const prefix of ['pairing:', 'sl:seen:']) {
+			const { keys } = await env.FERMI_KV.list({ prefix })
+			await Promise.all(keys.map((k) => env.FERMI_KV.delete(k.name)))
+		}
 	})
 
 	it('rejects a request with no secret header', async () => {
@@ -229,5 +244,100 @@ describe('handleSlackBridgeWebhook', () => {
 		expect(await env.FERMI_KV.get('pairing:CODE1234')).toBeNull()
 		expect(slackSent.map((m) => m.channel).sort()).toEqual(['D-owner', 'D9'])
 		expect(await listTasks(env.FERMI_DB)).toHaveLength(0)
+	})
+	it('returns 200 and enqueues once when the ack send fails, so sl-bridge does not retry', async () => {
+		await addToAllowlist(env.FERMI_DB, { channel: 'sl', senderId: 'U2' })
+		const message = {
+			author_id: 'U2',
+			display_name: 'Cy',
+			channel_id: 'DFAIL1',
+			team_id: 'T9',
+			is_im: true,
+			text: 'do the thing',
+		}
+		// Mirror sl-bridge forwardToWorker: retry the same body on any non-2xx (4 attempts).
+		const statuses: number[] = []
+		for (let attempt = 0; attempt < 4; attempt++) {
+			const res = await handleSlackBridgeWebhook(
+				webhookRequest(message, 'test-sl-secret'),
+				workerEnv,
+			).catch(() => new Response('error', { status: 500 }))
+			statuses.push(res.status)
+			if (res.ok) break
+		}
+		expect(statuses).toEqual([200])
+		const tasks = await listTasks(env.FERMI_DB, { status: 'pending' })
+		expect(tasks).toHaveLength(1)
+		expect(tasks[0]).toMatchObject({ sender: 'U2', chat_id: 'DFAIL1', payload: 'do the thing' })
+	})
+
+	it('returns 200 when the pairing code send fails', async () => {
+		const res = await handleSlackBridgeWebhook(
+			webhookRequest(
+				{ author_id: 'U3', channel_id: 'DFAIL2', team_id: 'T9', is_im: true, text: 'hi' },
+				'test-sl-secret',
+			),
+			workerEnv,
+		)
+		expect(res.status).toBe(200)
+		expect(await listTasks(env.FERMI_DB)).toHaveLength(0)
+	})
+
+	describe('message_id dedup', () => {
+		const base = {
+			author_id: 'U2',
+			display_name: 'Cy',
+			channel_id: 'DFAIL1',
+			team_id: 'T9',
+			is_im: true,
+			text: 'ok',
+		}
+
+		async function post(message: Record<string, unknown>): Promise<number> {
+			const res = await handleSlackBridgeWebhook(
+				webhookRequest(message, 'test-sl-secret'),
+				workerEnv,
+			)
+			return res.status
+		}
+
+		beforeEach(async () => {
+			await addToAllowlist(env.FERMI_DB, { channel: 'sl', senderId: 'U2' })
+			await addToAllowlist(env.FERMI_DB, { channel: 'sl', senderId: 'T9' })
+		})
+
+		it('enqueues once when the same DM message_id is posted twice', async () => {
+			const message = { ...base, message_id: 'm-1' }
+			expect([await post(message), await post(message)]).toEqual([200, 200])
+			expect(await listTasks(env.FERMI_DB)).toHaveLength(1)
+			expect(await env.FERMI_KV.get('sl:seen:T9:DFAIL1:m-1')).toBe('1')
+		})
+
+		it('enqueues once when the same channel message_id is posted twice', async () => {
+			const message = { ...base, channel_id: 'C42', is_im: false, message_id: 'm-1' }
+			expect([await post(message), await post(message)]).toEqual([200, 200])
+			expect(await listTasks(env.FERMI_DB)).toHaveLength(1)
+		})
+
+		it('enqueues both when message_ids differ', async () => {
+			expect([
+				await post({ ...base, message_id: 'm-1' }),
+				await post({ ...base, message_id: 'm-2' }),
+			]).toEqual([200, 200])
+			expect(await listTasks(env.FERMI_DB)).toHaveLength(2)
+		})
+
+		it('enqueues every POST when there is no message_id', async () => {
+			expect([await post(base), await post(base)]).toEqual([200, 200])
+			expect(await listTasks(env.FERMI_DB)).toHaveLength(2)
+			const { keys } = await env.FERMI_KV.list({ prefix: 'sl:seen:' })
+			expect(keys).toHaveLength(0)
+		})
+
+		it('does not mark a message seen when it was not enqueued', async () => {
+			const message = { ...base, author_id: 'U-unpaired', channel_id: 'D5', message_id: 'm-3' }
+			expect(await post(message)).toBe(200)
+			expect(await env.FERMI_KV.get('sl:seen:T9:D5:m-3')).toBeNull()
+		})
 	})
 })

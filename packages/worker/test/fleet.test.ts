@@ -7,6 +7,7 @@ import {
 	updateFleetConfig,
 	validateFleetConfigPatch,
 } from '../src/lib/fleet-config.ts'
+import { launchCloudAgent } from '../src/lib/fleet-launch.ts'
 import {
 	createCloudAgent,
 	getBox,
@@ -14,10 +15,11 @@ import {
 	heartbeatBox,
 	listCloudAgents,
 	registerBox,
+	routeHealth,
 	updateBox,
 	updateCloudAgent,
 } from '../src/lib/fleet-store.ts'
-import type { CloudAgentView } from '../src/lib/fleet-store.ts'
+import type { CloudAgentRow, CloudAgentView } from '../src/lib/fleet-store.ts'
 import {
 	claimTasks,
 	completeTask,
@@ -30,9 +32,11 @@ import { agentStall, cloudAgentLaunchSchema } from '../src/mcp/tools/cloud-agent
 import {
 	clearAudit,
 	clearFleet,
+	clearSecrets,
 	clearTasks,
 	setupAuditSchema,
 	setupFleetSchema,
+	setupSecretsSchema,
 	setupSkillsSchema,
 	setupTasksSchema,
 } from './setup-d1.ts'
@@ -121,6 +125,16 @@ describe('cloud_agent_launch schema (proof contract required)', () => {
 		})
 		expect(parsed.route).toBe('claude')
 		expect(parsed.instance_type).toBeUndefined()
+	})
+
+	it('accepts an alternate Claude account and rejects malformed ids', () => {
+		const base = {
+			prompt: 'build feature X end to end',
+			proof_contract: '{"kind":"artifact","name":"a"}',
+		}
+		expect(schema.parse({ ...base, account: 'kayo' }).account).toBe('kayo')
+		expect(schema.safeParse({ ...base, account: 'KAYO' }).success).toBe(false)
+		expect(schema.safeParse({ ...base, account: '../x' }).success).toBe(false)
 	})
 
 	it('accepts a per-launch instance_type (#43)', () => {
@@ -347,5 +361,101 @@ describe('task_wait semantics', () => {
 			result: 'runner_stalled',
 		})
 		expect((await failOpenTask(env.FERMI_DB, id, 'again')).ok).toBe(false)
+	})
+})
+
+describe('routeHealth (#47)', () => {
+	const agent = (p: Partial<CloudAgentRow>): CloudAgentRow =>
+		({ route: 'claude', status: 'failed', ended_at: 1, exit_reason: null, ...p }) as CloudAgentRow
+	const cap = 'harness api_error 429: You have hit your org monthly spend limit'
+
+	it('flags a route after three consecutive same-status API errors, newest first', () => {
+		const agents = [
+			agent({ ended_at: 30, exit_reason: cap }),
+			agent({ ended_at: 20, exit_reason: cap }),
+			agent({ ended_at: 10, exit_reason: cap }),
+			agent({ ended_at: 5, status: 'done', exit_reason: 'completed' }),
+			agent({ route: 'grok', ended_at: 40, exit_reason: 'completed', status: 'done' }),
+			agent({ ended_at: null, status: 'running' }),
+		]
+		expect(routeHealth(agents, 'claude')).toEqual({
+			route: 'claude',
+			unavailable: true,
+			consecutive_api_errors: 3,
+			api_error_status: '429',
+			last_error: cap,
+			since: 10,
+		})
+		expect(routeHealth(agents, 'grok')).toMatchObject({
+			unavailable: false,
+			consecutive_api_errors: 0,
+		})
+	})
+
+	it('tracks each Claude account separately', () => {
+		const agents = [
+			agent({ ended_at: 30, exit_reason: cap }),
+			agent({ ended_at: 20, exit_reason: cap }),
+			agent({ ended_at: 10, exit_reason: cap }),
+			agent({ account: 'kayo', ended_at: 40, status: 'done', exit_reason: 'completed' }),
+		]
+		expect(routeHealth(agents, 'claude').unavailable).toBe(true)
+		expect(routeHealth(agents, 'claude', 'kayo')).toMatchObject({
+			unavailable: false,
+			consecutive_api_errors: 0,
+		})
+	})
+
+	it('resets the streak on a different status or a non-API failure, and ignores ordering of input', () => {
+		const mixed = [
+			agent({ ended_at: 10, exit_reason: cap }),
+			agent({ ended_at: 30, exit_reason: cap }),
+			agent({ ended_at: 20, exit_reason: 'harness api_error 401: bad key' }),
+		]
+		expect(routeHealth(mixed, 'claude')).toMatchObject({
+			unavailable: false,
+			consecutive_api_errors: 1,
+			api_error_status: '429',
+		})
+		const stalled = [
+			agent({ ended_at: 30, exit_reason: 'runner_stalled' }),
+			agent({ ended_at: 20, exit_reason: cap }),
+		]
+		expect(routeHealth(stalled, 'claude')).toMatchObject({
+			unavailable: false,
+			consecutive_api_errors: 0,
+			api_error_status: null,
+		})
+	})
+})
+
+describe('alternate Claude account launch checks', () => {
+	const base = {
+		prompt: 'build feature X end to end',
+		proof_contract: '{"kind":"artifact","name":"out.txt","min_bytes":1}',
+	}
+	beforeAll(setupSecretsSchema)
+	beforeEach(clearSecrets)
+
+	it('rejects an account on a non-claude route', async () => {
+		expect(await launchCloudAgent(env, { ...base, route: 'grok', account: 'kayo' })).toMatchObject({
+			ok: false,
+			error: 'account_requires_claude_route',
+		})
+	})
+
+	it('rejects a malformed account from the admin path', async () => {
+		expect(await launchCloudAgent(env, { ...base, account: 'Kayo!' })).toMatchObject({
+			ok: false,
+			error: 'invalid_account',
+		})
+	})
+
+	it('fails at launch when the account token secret is missing', async () => {
+		expect(await launchCloudAgent(env, { ...base, account: 'kayo' })).toEqual({
+			ok: false,
+			error: 'account_token_not_configured',
+			missing: ['CLAUDE_CODE_OAUTH_TOKEN_KAYO'],
+		})
 	})
 })

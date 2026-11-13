@@ -1,0 +1,11 @@
+# guard-extra.txt — extra commands workers may never run: <regex><TAB><reason>
+\bwrangler\b[^\n]*\b(deploy|publish|secret|tail|login|delete)\b	Cloudflare account actions are orchestrator-only
+\bwrangler\b[^\n]*--remote\b	remote D1/KV/R2 are orchestrator-only
+\blaunchctl\b	the live daemon services belong to the orchestrator
+(~|\$HOME|/Users/[^/ ]+)/fermi-daemon(/|\s|$|"|')	the live daemon checkout is off limits
+(~|\$HOME|/Users/[^/ ]+)/git/	private repositories are off limits
+https?://(?!fermi\.example\.)[a-z0-9.-]+\.workers\.dev	deployed Fermi workers are off limits (use a local wrangler dev on $PORT)
+\bgh\s+(secret|variable|auth)\b	GitHub secrets and auth are orchestrator-only
+\bsecurity\s+(find|dump|export)	the keychain is off limits
+\bclaude\s+setup-token\b	credentials are orchestrator-only
+\b(npm|bun|pnpm|yarn)\s+publish\b	publishing is human-only

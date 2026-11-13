@@ -1,3 +1,4 @@
+import { timingSafeEqual } from '../lib/crypto.ts'
 import { ackOutbox, listPendingOutbox } from '../lib/outbox-store.ts'
 import type { Channel } from './dispatch.ts'
 
@@ -8,7 +9,7 @@ export type OutboxChannel = (typeof OUTBOX_CHANNELS)[number]
 function authorized(request: Request, env: Env): boolean {
 	const auth = request.headers.get('authorization') ?? ''
 	const token = env.FERMI_BEARER_TOKEN
-	return Boolean(token) && auth === `Bearer ${token}`
+	return Boolean(token) && timingSafeEqual(auth, `Bearer ${token}`)
 }
 
 /** GET /<channel>/outbox — pending rows for the bridge to deliver. */

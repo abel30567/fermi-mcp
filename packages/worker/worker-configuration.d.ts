@@ -22,6 +22,9 @@ declare global {
 		FERMI_SECRETS_KEY: string
 		FERMI_OWNER_SECRET?: string
 		FERMI_AUTH_ENABLED?: string
+		// Local-only auth bypass: exactly 'true' serves /mcp and /sse without OAuth. Never set it in a
+		// deployed config; unset or any other value keeps auth on (see src/lib/auth-mode.ts).
+		FERMI_LOCAL_DEV?: string
 		CF_ACCOUNT_ID?: string
 		CF_BROWSER_API_TOKEN?: string
 		ANTHROPIC_API_KEY?: string
@@ -36,5 +39,9 @@ declare global {
 		MACOS_MCP_URL?: string
 		MACOS_MCP_TOKEN?: string
 		FERMI_PUBLIC_URL?: string
+		SLACK_API_BASE?: string
+		TELEGRAM_API_BASE?: string
+		DISCORD_API_BASE?: string
+		ANTHROPIC_API_BASE?: string
 	}
 }
