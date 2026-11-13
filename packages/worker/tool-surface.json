@@ -1008,7 +1008,7 @@
 	},
 	{
 		"name": "channel_send",
-		"descriptionSha256": "cfba344499f3d84075e23c55429ada9f8aeef55fe6829057ded23b9f61eff7ee",
+		"descriptionSha256": "3fe367d140a22d84c8e7f26da3131e684a14486c6d55bb013c7f45b096421e72",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -1028,7 +1028,47 @@
 				},
 				"text": {
 					"type": "string",
-					"description": "Message text to send"
+					"description": "Message text to send (caption fallback when media is set)"
+				},
+				"media": {
+					"type": "object",
+					"properties": {
+						"kind": {
+							"type": "string",
+							"enum": [
+								"image",
+								"document",
+								"audio",
+								"video"
+							],
+							"description": "Attachment type"
+						},
+						"path": {
+							"type": "string",
+							"description": "Absolute path on the Mac, under ~/fermi-daemon/media/out/ (not supported for tg)"
+						},
+						"url": {
+							"type": "string",
+							"description": "Public http(s) URL of the file (required for tg)"
+						},
+						"mimetype": {
+							"type": "string",
+							"description": "e.g. image/png; inferred from the file when omitted"
+						},
+						"caption": {
+							"type": "string",
+							"description": "Caption shown with the attachment (max 1024); defaults to text"
+						},
+						"file_name": {
+							"type": "string",
+							"description": "Display name for documents"
+						}
+					},
+					"required": [
+						"kind"
+					],
+					"additionalProperties": false,
+					"description": "Optional attachment to send"
 				}
 			},
 			"required": [

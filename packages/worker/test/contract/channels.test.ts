@@ -93,23 +93,32 @@ describeTool('channel_send', () => {
 		expect(seen[0].body).toEqual({ content: 'hello there' })
 	})
 
-	it('media is not an argument: it is dropped and only the text is sent', async () => {
-		const media = { url: 'https://example.com/cat.png', type: 'image' }
-		expect(resultJson(await send('wa', '15555550100', { media }))).toEqual({
-			ok: true,
-			channel: 'wa',
-		})
-		expect(await outboxRows()).toEqual([
-			{ channel: 'wa', chat_id: '15555550100', body: 'hello there', status: 'pending' },
-		])
+	it('media rides the outbox for wa, goes by URL to tg, and a bad path is refused', async () => {
+		const path = '/Users/me/fermi-daemon/media/out/cat.png'
+		expect(resultJson(await send('wa', '15555550100', { media: { kind: 'image', path } }))).toEqual(
+			{ ok: true, channel: 'wa' },
+		)
+		const row = await env.FERMI_DB.prepare('SELECT body, media FROM outbox').first<{
+			body: string
+			media: string
+		}>()
+		expect(row?.body).toBe('hello there')
+		expect(JSON.parse(row?.media ?? 'null')).toEqual({ kind: 'image', path })
 
-		const seen = capture('https://api.telegram.org', 'POST', '/bottg-contract-token/sendMessage', {
+		const seen = capture('https://api.telegram.org', 'POST', '/bottg-contract-token/sendPhoto', {
 			ok: true,
 		})
-		expect(resultJson(await send('tg', '42', { media }))).toEqual({ ok: true, channel: 'tg' })
-		expect(seen.map((r) => r.body)).toEqual([
-			{ chat_id: '42', text: 'hello there', parse_mode: 'Markdown' },
-		])
+		const url = 'https://example.com/cat.png'
+		expect(resultJson(await send('tg', '42', { media: { kind: 'image', url } }))).toEqual({
+			ok: true,
+			channel: 'tg',
+		})
+		expect(seen.map((r) => r.body)).toEqual([{ chat_id: '42', photo: url, caption: 'hello there' }])
+
+		const bad = resultJson(
+			await send('wa', '15555550100', { media: { kind: 'image', path: '/etc/passwd' } }),
+		)
+		expect(bad.ok).toBe(false)
 	})
 })
 

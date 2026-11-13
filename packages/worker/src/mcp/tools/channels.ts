@@ -1,6 +1,12 @@
 import { z } from 'zod'
 import { readDiscordChannel } from '../../channels/discord-read.ts'
 import { sendChannelMessage } from '../../channels/dispatch.ts'
+import {
+	MediaValidationError,
+	describeOutboundMedia,
+	outboundMediaSchema,
+	validateOutboundMedia,
+} from '../../channels/media.ts'
 import { logChannelMessage } from '../../lib/conversation.ts'
 import { approvePairing } from '../../lib/pairing.ts'
 import { defineTool } from '../../lib/tool.ts'
@@ -10,18 +16,35 @@ export function registerChannelTools(agent: FermiMCP) {
 	defineTool(agent, {
 		name: 'channel_send',
 		description:
-			'Send a message to a channel chat (used by the local daemon to reply to queued tasks). The bot token stays server-side.',
+			'Send a message to a channel chat (used by the local daemon to reply to queued tasks). The bot token stays server-side. Pass `media` to send an image/document/audio/video as a real attachment: a media call sends ONE attachment message whose caption is media.caption (else text). Local `path` must be under ~/fermi-daemon/media/out/ and is delivered by the Mac-local bridge (wa/dc/sl); tg only accepts `url`.',
 		schema: {
 			channel: z.enum(['tg', 'wa', 'dc', 'sl']).describe('Channel to send through'),
 			chat_id: z.string().describe('Channel-specific chat id (from the task row)'),
-			text: z.string().describe('Message text to send'),
+			text: z.string().describe('Message text to send (caption fallback when media is set)'),
+			media: outboundMediaSchema.optional().describe('Optional attachment to send'),
 		},
 		scope: ['write:channels', 'network'],
 		risk: 'low',
 		mutates: true,
 		handler: async (args, env) => {
-			await sendChannelMessage(env, args.channel, args.chat_id, args.text)
-			await logChannelMessage(env.FERMI_DB, args.channel, args.chat_id, 'assistant', args.text)
+			let media: ReturnType<typeof validateOutboundMedia> | undefined
+			if (args.media) {
+				try {
+					media = validateOutboundMedia(args.media, args.channel)
+				} catch (err) {
+					if (!(err instanceof MediaValidationError)) throw err
+					return {
+						content: [
+							{ type: 'text' as const, text: JSON.stringify({ ok: false, error: err.message }) },
+						],
+					}
+				}
+			}
+			await sendChannelMessage(env, args.channel, args.chat_id, args.text, media)
+			const logged = media
+				? [args.text, describeOutboundMedia(media)].filter(Boolean).join(' ')
+				: args.text
+			await logChannelMessage(env.FERMI_DB, args.channel, args.chat_id, 'assistant', logged)
 			return {
 				content: [
 					{ type: 'text' as const, text: JSON.stringify({ ok: true, channel: args.channel }) },
