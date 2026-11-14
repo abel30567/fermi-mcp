@@ -62,6 +62,9 @@ const sseApiHandler = (FermiMCP as any).serve('/sse', { binding: 'MCP_OBJECT' })
 // they reach the same tool surface via their per-box bearer token instead.
 // biome-ignore lint/suspicious/noExplicitAny: McpAgent.serve is not exposed in types
 const boxMcpApiHandler = (FermiMCP as any).serve('/box/mcp', { binding: 'MCP_OBJECT' })
+// Knowledge-token MCP (ISSUE-88): six knowledge tools, walled to the token's namespace.
+// biome-ignore lint/suspicious/noExplicitAny: McpAgent.serve is not exposed in types
+const knowledgeMcpApiHandler = (FermiMCP as any).serve('/k/mcp', { binding: 'MCP_OBJECT' })
 
 const defaultHandler = {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -309,6 +312,15 @@ const defaultHandler = {
 			})
 		}
 
+		// Knowledge tokens (ISSUE-88): mint (secret returned once), list (no secret or hash), revoke.
+		if (url.pathname === '/admin/knowledge/tokens' || url.pathname === '/admin/knowledge/revoke') {
+			const auth = request.headers.get('authorization') ?? ''
+			if (!env.FERMI_BEARER_TOKEN || !timingSafeEqual(auth, `Bearer ${env.FERMI_BEARER_TOKEN}`))
+				return new Response('Unauthorized', { status: 401 })
+			const { handleKnowledgeAdmin } = await import('./lib/knowledge-store.ts')
+			return handleKnowledgeAdmin(request, env, url.pathname)
+		}
+
 		if (url.pathname === '/admin/tasks/pending' && request.method === 'GET') {
 			const auth = request.headers.get('authorization') ?? ''
 			const token = env.FERMI_BEARER_TOKEN
@@ -370,6 +382,20 @@ const defaultHandler = {
 				baseUrl: `box:${box.box_id}`,
 			}
 			return boxMcpApiHandler.fetch(request, env, ctx)
+		}
+		if (url.pathname === '/k/mcp') {
+			const { authKnowledge, knowledgeSessionMatches } = await import('./lib/knowledge-store.ts')
+			const token = await authKnowledge(request, env)
+			if (!token) return new Response('Unauthorized', { status: 401 })
+			const host = `k:${token.token_id}`
+			// A session id opened for another principal or token must not be reused.
+			if (!(await knowledgeSessionMatches(request, env, host)))
+				return new Response('Unauthorized', { status: 401 })
+			;(ctx as unknown as { props: Record<string, unknown> }).props = {
+				baseUrl: host,
+				knowledge: { tokenId: token.token_id, namespace: token.namespace },
+			}
+			return knowledgeMcpApiHandler.fetch(request, env, ctx)
 		}
 		if (url.pathname === '/box/heartbeat' && request.method === 'POST') {
 			return handleBoxHeartbeat(request, env)

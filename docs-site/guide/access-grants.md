@@ -8,6 +8,7 @@ Every tier of Fermi is a trust decision. This page enumerates exactly what each 
 |-------|---------|--------------|------------|------------------------|
 | Cloudflare account | you | wrangler auth on your machine | Tier 1 deploy | your CF account |
 | `FERMI_BEARER_TOKEN` | Worker + daemon + broker executor | Worker secret; Mac `.env` | all `/admin/*` endpoints | **full control plane**: launch fleet, read session state, drain queues |
+| Knowledge token `<token_id>.<secret>` | an external knowledge client (one per namespace) | client's env; only SHA-256(secret) in D1 | `/k/mcp` | read and write memories and skills of **its own namespace** only; no secrets, no tools beyond the six knowledge tools, no `/admin/*`. Revoke with `POST /admin/knowledge/revoke` |
 | `FERMI_SECRETS_KEY` | Worker | Worker secret | encrypting your stored secrets | offline decryption of the secrets table (needs D1 access too) |
 | `FERMI_OWNER_SECRET` (+ TOTP) | Worker | Worker secret | OAuth consent gate | attacker can authorize new MCP clients |
 | `ANTHROPIC_API_KEY` | Worker | Worker secret | channel inference only | API spend |
@@ -22,10 +23,11 @@ Every tier of Fermi is a trust decision. This page enumerates exactly what each 
 ## Design rules that bound each grant
 
 1. **Per-box tokens, not the admin token, on fleet boxes.** A neutrino authenticates as `<box_id>.<secret>`; the secret is hashed at rest and scoped to the `/box/*` gateway. A stolen box token can claim that box's task and post artifacts — it cannot call `/admin/fleet/launch` or read another box's results (`wait` is box-scoped; tested in `test/session-broker.test.ts`).
-2. **Secrets are allowlisted, then injected.** A stored secret carries `allowed_hosts` and `allowed_capabilities`. The sandbox and browser lanes see <code v-pre>{{secret:NAME}}</code> placeholders; the gateway expands them only toward allowlisted hosts. `secret_resolve` (plaintext to the model) must be explicitly enabled per secret and is rate-limited and audited.
-3. **Cookies never ride to boxes.** Fleet agents get a *broker handle*, never `storageState`. Every browser op round-trips the Worker, which re-checks session validity — `web_session_invalidate` cuts off in-flight agents at their next op. Leak witness tests assert the canary cookie never crosses. See [The session broker](/components/session-broker).
-4. **The boot path is pinned.** Boxes fetch `box-runner.mjs` at a pinned commit SHA and verify its sha256 before executing; mismatch fails closed and the box reports rather than runs. Launch refuses when no pin is set.
-5. **High-risk tools are approval-gated** (mint-token-then-redeem, single use, 300s TTL), everything is audited to D1, and plan mode blocks mutation wholesale.
+2. **Knowledge tokens are walled to one namespace.** A knowledge token reaches only `/k/mcp`, which registers six tools (`lib/knowledge-scope.ts`) and stores their rows apart from the owner's (`lib/knowledge-store.ts`): owner and box sessions never read them, and the token cannot read or overwrite owner rows. Tested in `test/contract/knowledge.test.ts`.
+3. **Secrets are allowlisted, then injected.** A stored secret carries `allowed_hosts` and `allowed_capabilities`. The sandbox and browser lanes see <code v-pre>{{secret:NAME}}</code> placeholders; the gateway expands them only toward allowlisted hosts. `secret_resolve` (plaintext to the model) must be explicitly enabled per secret and is rate-limited and audited.
+4. **Cookies never ride to boxes.** Fleet agents get a *broker handle*, never `storageState`. Every browser op round-trips the Worker, which re-checks session validity — `web_session_invalidate` cuts off in-flight agents at their next op. Leak witness tests assert the canary cookie never crosses. See [The session broker](/components/session-broker).
+5. **The boot path is pinned.** Boxes fetch `box-runner.mjs` at a pinned commit SHA and verify its sha256 before executing; mismatch fails closed and the box reports rather than runs. Launch refuses when no pin is set.
+6. **High-risk tools are approval-gated** (mint-token-then-redeem, single use, 300s TTL), everything is audited to D1, and plan mode blocks mutation wholesale.
 
 ## Threat-model honesty
 
