@@ -3,6 +3,7 @@ import { getAwsCreds, runInstance, terminateInstances } from './aws-ec2.ts'
 import { getFleetConfig, monthSpendUsd } from './fleet-config.ts'
 import type { CloudAgentRow } from './fleet-store.ts'
 import { getBox, registerBox, updateBox, updateCloudAgent } from './fleet-store.ts'
+import { type HarnessPin, harnessInstallScript, harnessPinFromConfig } from './harness-pin.ts'
 import { type RunnerPin, runnerFetchScript, runnerPinFromConfig } from './runner-pin.ts'
 
 export interface ProvisionOutcome {
@@ -22,6 +23,7 @@ export function bootstrapUserData(opts: {
 	boxToken: string
 	claudeModel: string | null
 	runnerPin: RunnerPin
+	harness?: HarnessPin | null
 }): string {
 	// Belt-and-braces shutdown: the instance halts itself even if the reaper
 	// and the runner both die (InstanceInitiatedShutdownBehavior=terminate).
@@ -45,6 +47,16 @@ export function bootstrapUserData(opts: {
 		...(opts.mcpBaseUrl ? [`FERMI_URL=${opts.mcpBaseUrl}`] : []),
 		...(opts.route === 'claude' && opts.claudeModel ? [`CLAUDE_MODEL=${opts.claudeModel}`] : []),
 		'EOF',
+		// hbar (ISSUE-89): claude route only, and only when the box can reach the
+		// server; without a pin the user-data is unchanged.
+		...(opts.harness && opts.route === 'claude' && opts.mcpBaseUrl
+			? [
+					harnessInstallScript(opts.harness, {
+						baseUrl: opts.mcpBaseUrl,
+						boxToken: opts.boxToken,
+					}),
+				]
+			: []),
 		// Baked AMIs ship a fermi-runner systemd unit that reads /etc/fermi/box.env.
 		'systemctl start fermi-runner 2>/dev/null || true',
 	].join('\n')
@@ -108,6 +120,7 @@ export async function dispatchProvision(env: Env, agent: CloudAgentRow): Promise
 			claudeModel: agent.route === 'claude' ? config.claude_model : null,
 			boxToken: `${boxId}.${boxSecret}`,
 			runnerPin,
+			harness: harnessPinFromConfig(config),
 		}),
 		tagName: `fermi-${boxId}`,
 	})

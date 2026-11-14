@@ -4,6 +4,7 @@ import {
 	authBox,
 	handleBoxArtifact,
 	handleBoxComplete,
+	handleBoxHarness,
 	handleBoxHeartbeat,
 	handleBoxInferenceAuth,
 	handleBoxInferenceAuthUpdate,
@@ -227,6 +228,24 @@ const defaultHandler = {
 			const out = await pinRunner(env, await request.json().catch(() => ({})))
 			return Response.json(out.body, { status: out.status })
 		}
+		// hbar harness (ISSUE-89): upload streams to R2 (sha256-checked by R2);
+		// the pin checks the stored object's sha256 before boxes get it.
+		if (url.pathname === '/admin/fleet/harness' && request.method === 'PUT') {
+			const auth = request.headers.get('authorization') ?? ''
+			if (!env.FERMI_BEARER_TOKEN || !timingSafeEqual(auth, `Bearer ${env.FERMI_BEARER_TOKEN}`))
+				return new Response('Unauthorized', { status: 401 })
+			const { uploadHarness } = await import('./lib/fleet-config.ts')
+			const out = await uploadHarness(env, request, url.searchParams.get('name') ?? '')
+			return Response.json(out.body, { status: out.status })
+		}
+		if (url.pathname === '/admin/fleet/pin-harness' && request.method === 'POST') {
+			const auth = request.headers.get('authorization') ?? ''
+			if (!env.FERMI_BEARER_TOKEN || !timingSafeEqual(auth, `Bearer ${env.FERMI_BEARER_TOKEN}`))
+				return new Response('Unauthorized', { status: 401 })
+			const { pinHarness } = await import('./lib/fleet-config.ts')
+			const out = await pinHarness(env, await request.json().catch(() => ({})))
+			return Response.json(out.body, { status: out.status })
+		}
 		// Operator edits to fleet:config without Cloudflare KV access (#43). The
 		// runner pin stays on its own fetch+hash endpoint above.
 		if (url.pathname === '/admin/fleet/config' && request.method === 'GET') {
@@ -360,6 +379,9 @@ const defaultHandler = {
 		}
 		if (url.pathname === '/box/complete' && request.method === 'POST') {
 			return handleBoxComplete(request, env)
+		}
+		if (url.pathname === '/box/harness' && request.method === 'GET') {
+			return handleBoxHarness(request, env)
 		}
 		if (url.pathname === '/box/report' && request.method === 'POST') {
 			return handleBoxReport(request, env)
