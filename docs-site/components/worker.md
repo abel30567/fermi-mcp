@@ -24,8 +24,9 @@ Every tool declares `scope`, `risk`, `mutates`, and runs through the same pipeli
 |--------------|------|---------|
 | `/mcp`, `/sse` | OAuth (when enabled) | MCP transports |
 | `/tg`, `/slack`, `/dc`, `/wa` webhooks | platform secrets | channels |
-| `/admin/*` | `FERMI_BEARER_TOKEN` | fleet launch/status/pin, broker claim/complete, session capture/state, pending tasks |
+| `/admin/*` | `FERMI_BEARER_TOKEN` | fleet launch/status/pin, broker claim/complete, session capture/state, pending tasks, knowledge tokens (`POST /admin/knowledge/tokens` `{namespace, label, expires_at?}` mints and returns the token once; `GET` lists without secret or hash; `POST /admin/knowledge/revoke` `{token_id}`) |
 | `/box/*` | per-box token `<box_id>.<secret>` | the neutrino gateway: poll, heartbeat, artifact, complete, report, session-lease, browser-rpc, inference-auth |
+| `/k/mcp` | knowledge token `<token_id>.<secret>` | MCP for one namespace: exactly `skill_search`, `skill_load`, `skill_set`, `memory_recall`, `memory_write`, `search`, no approval round. Rows live in `knowledge_memory` / `knowledge_skills`, never in `memory` / `skills`, so owner and box sessions never see them, and `skill_set` refuses an owner skill's slug. Every call is audited with `principal`, `token_id` and `namespace`. |
 | `/apps/*` | OAuth-gated | static hosting from R2 |
 | `/phone/webhook`, `/phone/stream/*` | Twilio signature; per-call token in the stream path | call status callbacks and the call's audio WebSocket ([phone calls](/components/phone-calls)) |
 

@@ -1,4 +1,9 @@
 import { z } from 'zod'
+import {
+	loadKnowledgeSkill,
+	searchKnowledgeSkills,
+	upsertKnowledgeSkill,
+} from '../../lib/knowledge-store.ts'
 import { decaySkill, loadSkill, searchSkillsRanked, upsertSkill } from '../../lib/skills-store.ts'
 import { defineTool } from '../../lib/tool.ts'
 import type { FermiMCP } from '../index.ts'
@@ -16,7 +21,10 @@ export function registerSkillTools(agent: FermiMCP) {
 		risk: 'low',
 		mutates: false,
 		handler: async (args, env) => {
-			const results = await searchSkillsRanked(args.query, args.limit, env)
+			const ns = agent.knowledge?.namespace
+			const results = ns
+				? await searchKnowledgeSkills(ns, args.query, args.limit, env)
+				: await searchSkillsRanked(args.query, args.limit, env)
 			return {
 				content: [
 					{
@@ -39,7 +47,10 @@ export function registerSkillTools(agent: FermiMCP) {
 		risk: 'low',
 		mutates: false,
 		handler: async (args, env) => {
-			const loaded = await loadSkill(args.slug, env)
+			const ns = agent.knowledge?.namespace
+			const loaded = ns
+				? await loadKnowledgeSkill(ns, args.slug, env)
+				: await loadSkill(args.slug, env)
 			return {
 				content: [
 					{
@@ -76,7 +87,8 @@ export function registerSkillTools(agent: FermiMCP) {
 		risk: 'low',
 		mutates: true,
 		handler: async (args, env) => {
-			const res = await upsertSkill(args, env)
+			const ns = agent.knowledge?.namespace
+			const res = ns ? await upsertKnowledgeSkill(ns, args, env) : await upsertSkill(args, env)
 			return {
 				content: [{ type: 'text' as const, text: JSON.stringify(res) }],
 			}
