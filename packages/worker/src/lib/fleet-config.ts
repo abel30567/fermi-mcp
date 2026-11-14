@@ -1,3 +1,11 @@
+import {
+	HARNESS_NAME_RE,
+	HARNESS_SHA256_HEADER,
+	HARNESS_VERSION_RE,
+	type HarnessPin,
+	SHA256_HEX_RE,
+	harnessKey,
+} from './harness-pin.ts'
 import { REF_RE, RUNNER_ENTRY, manifestError, runnerUrl } from './runner-pin.ts'
 
 export interface FleetConfig {
@@ -15,6 +23,8 @@ export interface FleetConfig {
 	runner_sha256: string | null
 	/** Multi-file pin (MCP-22): path → sha256 at runner_ref; overrides runner_sha256 when set. */
 	runner_files: Record<string, string> | null
+	/** hbar tarball for route `claude` (ISSUE-89); set via POST /admin/fleet/pin-harness. */
+	harness: HarnessPin | null
 	default_ttl_seconds: number
 	max_ttl_seconds: number
 	heartbeat_stale_ms: number
@@ -33,6 +43,7 @@ const DEFAULTS: FleetConfig = {
 	runner_ref: null,
 	runner_sha256: null,
 	runner_files: null,
+	harness: null,
 	default_ttl_seconds: 3600,
 	max_ttl_seconds: 4 * 3600,
 	heartbeat_stale_ms: 10 * 60_000,
@@ -181,6 +192,83 @@ export async function pinRunner(
 		JSON.stringify({ ...config, runner_ref: ref, runner_sha256: sha256, runner_files: files }),
 	)
 	return { status: 200, body: { ok: true, ref, sha256, files, bytes } }
+}
+
+const hex = (buf: ArrayBuffer) =>
+	[...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, '0')).join('')
+
+/**
+ * PUT /admin/fleet/harness?name=<name>. Streams the body to R2 under
+ * `harness/<name>`; R2 stores it only when its sha256 equals the header.
+ */
+export async function uploadHarness(
+	env: Env,
+	request: Request,
+	name: string,
+): Promise<{ status: number; body: Record<string, unknown> }> {
+	if (!HARNESS_NAME_RE.test(name))
+		return {
+			status: 400,
+			body: { ok: false, error: 'name must match [a-z0-9][a-z0-9._-]*.tar.gz' },
+		}
+	const sha256 = request.headers.get(HARNESS_SHA256_HEADER) ?? ''
+	if (!SHA256_HEX_RE.test(sha256))
+		return {
+			status: 400,
+			body: { ok: false, error: `${HARNESS_SHA256_HEADER} must be 64 lowercase hex chars` },
+		}
+	// Streamed straight to R2 (never buffered; bodies run to ~95 MB).
+	if (!request.body) return { status: 400, body: { ok: false, error: 'body required' } }
+	let obj: R2Object | null
+	try {
+		obj = await env.FERMI_BUCKET.put(harnessKey(name), request.body, { sha256 })
+	} catch (err) {
+		// R2 refuses the put when the streamed bytes do not hash to `sha256`.
+		const mismatch = /sha-?256|checksum/i.test(String(err))
+		return {
+			status: 400,
+			body: { ok: false, error: mismatch ? 'sha256_mismatch' : 'put_failed', detail: String(err) },
+		}
+	}
+	if (!obj) return { status: 500, body: { ok: false, error: 'put_failed' } }
+	return { status: 200, body: { ok: true, name, size: obj.size, sha256 } }
+}
+
+/**
+ * POST /admin/fleet/pin-harness. `{name, sha256, version}` pins an uploaded
+ * object whose stored sha256 equals `sha256`; `{clear: true}` unpins.
+ */
+export async function pinHarness(
+	env: Env,
+	body: unknown,
+): Promise<{ status: number; body: Record<string, unknown> }> {
+	const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>
+	let harness: HarnessPin | null = null
+	if (b.clear !== true) {
+		const { name, sha256, version } = b
+		if (typeof name !== 'string' || !HARNESS_NAME_RE.test(name))
+			return {
+				status: 400,
+				body: { ok: false, error: 'name must match [a-z0-9][a-z0-9._-]*.tar.gz' },
+			}
+		if (typeof sha256 !== 'string' || !SHA256_HEX_RE.test(sha256))
+			return { status: 400, body: { ok: false, error: 'sha256 must be 64 lowercase hex chars' } }
+		if (typeof version !== 'string' || !HARNESS_VERSION_RE.test(version))
+			return { status: 400, body: { ok: false, error: 'version must match [A-Za-z0-9._+-]{1,40}' } }
+		const head = await env.FERMI_BUCKET.head(harnessKey(name))
+		if (!head) return { status: 404, body: { ok: false, error: 'not_found', name } }
+		const stored = head.checksums.sha256 ? hex(head.checksums.sha256) : null
+		if (stored !== sha256)
+			return {
+				status: 409,
+				body: { ok: false, error: 'sha256_mismatch', expected: sha256, actual: stored },
+			}
+		harness = { name, sha256, version }
+	}
+	const raw = await env.FERMI_KV.get('fleet:config')
+	const config = raw ? JSON.parse(raw) : {}
+	await env.FERMI_KV.put('fleet:config', JSON.stringify({ ...config, harness }))
+	return { status: 200, body: { ok: true, harness } }
 }
 
 export async function updateFleetConfig(

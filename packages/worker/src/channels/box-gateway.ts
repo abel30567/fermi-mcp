@@ -1,4 +1,4 @@
-import { accruedCostUsd } from '../lib/fleet-config.ts'
+import { accruedCostUsd, getFleetConfig } from '../lib/fleet-config.ts'
 import type { BoxRow } from '../lib/fleet-store.ts'
 import {
 	claudeTokenSecretName,
@@ -8,6 +8,7 @@ import {
 	updateBox,
 	updateCloudAgent,
 } from '../lib/fleet-store.ts'
+import { harnessKey, harnessPinFromConfig } from '../lib/harness-pin.ts'
 import { getSecret, updateAppSecretIfVersion } from '../lib/secrets-store.ts'
 import {
 	claimTasks,
@@ -64,6 +65,22 @@ export async function authBox(request: Request, env: Env): Promise<BoxRow | null
 	const meta = boxMeta(box)
 	if (!meta.token_hash || meta.token_hash !== (await sha256Hex(secret))) return null
 	return box
+}
+
+/** GET /box/harness (ISSUE-89): stream the pinned hbar tarball to a live box. */
+export async function handleBoxHarness(request: Request, env: Env): Promise<Response> {
+	const box = await authBox(request, env)
+	if (!box) return new Response('Unauthorized', { status: 401 })
+	const pin = harnessPinFromConfig(await getFleetConfig(env))
+	const obj = pin ? await env.FERMI_BUCKET.get(harnessKey(pin.name)) : null
+	if (!obj) return new Response('Not Found', { status: 404 })
+	return new Response(obj.body, {
+		headers: {
+			'Content-Type': 'application/gzip',
+			'Content-Length': String(obj.size),
+			'Cache-Control': 'private, no-store',
+		},
+	})
 }
 
 export async function handleBoxHeartbeat(request: Request, env: Env): Promise<Response> {
