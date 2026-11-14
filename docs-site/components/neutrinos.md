@@ -46,12 +46,100 @@ Legacy free-text contracts are grandfathered; new launches should always pass st
 
 ## What access this tier needs (and nothing more)
 
-| Grant | Why | Scope it |
-|-------|-----|----------|
-| AWS access key pair | `RunInstances`/`TerminateInstances`/`DescribeInstances` | IAM policy limited to those actions, one region, your fleet security group |
-| `CLAUDE_CODE_OAUTH_TOKEN` in Fermi secrets | boxes inference on your existing Claude subscription — **inference is not billed to the budget**, EC2 wall-clock is | it's your sub; rotate from your Anthropic account |
-| `GITHUB_TOKEN` in Fermi secrets | clone/push/PR | fine-grained token, only the repos agents work |
-| `fleet:config` in KV | region, instance type, `allowed_instance_types`, `max_concurrent`, `monthly_budget_usd`, `runner_ref`+`runner_files` (path → sha256; legacy `runner_sha256` still honoured), TTLs | `GET`/`POST /admin/fleet/config` (bearer) for the operator fields; `pin-runner` for the pin (`{ref}` or `{ref, files: {path: sha256}}`) |
+Every long-lived credential lives in one place, the Worker. Hosts and the operator reach the Worker with their own grants, the Worker spends the AWS key on three EC2 calls, and each box gets a single-use token that unlocks only what its own task needs.
+
+<Diagram id="neutrinoAccess" />
+
+The same thing over time: which credential is presented at each step of a launch.
+
+<Diagram id="neutrinoAccessFlow" />
+
+| Credential | Lives in | Presented by → to | Used for | Scope it |
+|------------|----------|-------------------|----------|----------|
+| AWS access key pair (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) | Fermi secrets | Worker → EC2 API (SigV4, `aws4fetch`) | `RunInstances` at launch; `TerminateInstances` from teardown and the reaper; `DescribeInstances` to confirm a box is gone and to sweep orphaned `fermi-fleet` instances | dedicated IAM user, [policy below](#least-privilege-iam-policy). Boxes never see it |
+| Per-box token `<box_id>.<secret>` | box user-data only; Worker keeps the sha256 in D1 | box → `/box/*` | poll, heartbeat, artifact, inference-auth, session-lease, browser-rpc, `/box/mcp`, complete, report | one box, one agent; marking the box destroyed revokes it |
+| `CLAUDE_CODE_OAUTH_TOKEN` (or `_<ACCOUNT>`), `CPA_AUTH_CODEX` / `CPA_AUTH_XAI` / `CPA_API_KEY` | Fermi secrets | Worker → box via `/box/inference-auth`, then box → provider | inference for the box's route only, called directly (never through your Mac). **Inference is not billed to the budget**, EC2 wall-clock is | only the launch's route is handed out; codex/grok boxes may write back only their own refreshed bundle |
+| `GITHUB_TOKEN` | Fermi secrets | Worker → box via `/box/inference-auth`, then box → GitHub | clone, push, open the PR | only handed to boxes whose task names a `repo`; fine-grained token, only the repos agents work |
+| Host OAuth grant with `write:fleet` | the host | host → `/mcp` | `cloud_agent_launch` / `followup` / `stop` / `destroy` | read-only grants can list and get, not launch |
+| Admin bearer (`FERMI_BEARER_TOKEN`) | Worker env, operator's machine | `fleetctl` → `/admin/fleet/*` | `fleet:config` and the runner pin | operator only |
+| `fleet:config` in KV | KV | read by the Worker | region, instance type, `allowed_instance_types`, `max_concurrent`, `monthly_budget_usd`, `runner_ref`+`runner_files` (path → sha256; legacy `runner_sha256` still honoured), TTLs | `GET`/`POST /admin/fleet/config` (bearer) for the operator fields; `pin-runner` for the pin (`{ref}` or `{ref, files: {path: sha256}}`) |
+
+The runner fetch at boot uses no credential at all: files come from `raw.githubusercontent.com` at the pinned SHA and are sha256-checked before the box token is even written to disk.
+
+### Least-privilege IAM policy
+
+The Worker makes exactly three EC2 calls (`packages/worker/src/lib/aws-ec2.ts`), and none of them pass a key pair, an instance profile, a subnet or a security group. So the key needs no `iam:PassRole`, no key-pair, SSM, S3 or IAM actions, and boxes have no AWS credentials of their own. Instances land in the region's default VPC with its default security group.
+
+Create a dedicated IAM user (programmatic access only, no console) with this policy. Replace `REGION` (your `fleet:config` region, default `us-east-1`), `ACCOUNT_ID` and `AMI_ID` (the `image_ref` of your `cloud_env_snapshot`), and keep the instance-type list in step with `allowed_instance_types`.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LaunchOnlyTaggedAllowedSizes",
+      "Effect": "Allow",
+      "Action": "ec2:RunInstances",
+      "Resource": "arn:aws:ec2:REGION:ACCOUNT_ID:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/fermi-fleet": "true",
+          "ec2:InstanceType": ["t3.small", "t3.medium", "t3.large"]
+        }
+      }
+    },
+    {
+      "Sid": "LaunchOnlyTheBakedImage",
+      "Effect": "Allow",
+      "Action": "ec2:RunInstances",
+      "Resource": "arn:aws:ec2:REGION::image/AMI_ID"
+    },
+    {
+      "Sid": "LaunchSupportingResources",
+      "Effect": "Allow",
+      "Action": "ec2:RunInstances",
+      "Resource": [
+        "arn:aws:ec2:REGION:ACCOUNT_ID:volume/*",
+        "arn:aws:ec2:REGION:ACCOUNT_ID:network-interface/*",
+        "arn:aws:ec2:REGION:ACCOUNT_ID:subnet/*",
+        "arn:aws:ec2:REGION:ACCOUNT_ID:security-group/*"
+      ]
+    },
+    {
+      "Sid": "TagOnlyAtLaunch",
+      "Effect": "Allow",
+      "Action": "ec2:CreateTags",
+      "Resource": "arn:aws:ec2:REGION:ACCOUNT_ID:instance/*",
+      "Condition": { "StringEquals": { "ec2:CreateAction": "RunInstances" } }
+    },
+    {
+      "Sid": "TerminateOnlyFleetInstances",
+      "Effect": "Allow",
+      "Action": "ec2:TerminateInstances",
+      "Resource": "arn:aws:ec2:REGION:ACCOUNT_ID:instance/*",
+      "Condition": { "StringEquals": { "aws:ResourceTag/fermi-fleet": "true" } }
+    },
+    {
+      "Sid": "DescribeInFleetRegion",
+      "Effect": "Allow",
+      "Action": "ec2:DescribeInstances",
+      "Resource": "*",
+      "Condition": { "StringEquals": { "aws:RequestedRegion": "REGION" } }
+    }
+  ]
+}
+```
+
+| Statement | Called from | What it prevents |
+|-----------|-------------|------------------|
+| `LaunchOnlyTaggedAllowedSizes` | `runInstance` at launch | launching anything untagged, or a size outside your list, even with a leaked key |
+| `LaunchOnlyTheBakedImage` | `runInstance` | booting any AMI but yours. Update it when you register a new `cloud_env_snapshot` (or swap it for an `ec2:Owner` = `ACCOUNT_ID` condition on `image/*` if you rotate images often) |
+| `LaunchSupportingResources` | `runInstance` | EC2 authorises the root volume, ENI, subnet and security group of every launch; these are scoped to your account and region |
+| `TagOnlyAtLaunch` | the `TagSpecification` on `RunInstances` | retagging existing instances `fermi-fleet=true` to make them terminable |
+| `TerminateOnlyFleetInstances` | `dispatchTeardown`, the reaper, the orphan sweep | terminating anything in the account that Fermi did not launch |
+| `DescribeInFleetRegion` | `isInstanceTerminated`, `listFleetInstances` | `DescribeInstances` has no resource-level scoping, so it is pinned to the fleet region instead |
+
+Two optional extras. If your account encrypts EBS by default with a customer-managed KMS key, the user also needs `kms:CreateGrant`, `kms:GenerateDataKeyWithoutPlaintext` and `kms:Decrypt` on that key (the AWS-managed `aws/ebs` key needs nothing). And an EC2 vCPU service quota in the region is a hard backstop under `max_concurrent` and `monthly_budget_usd`.
 
 Cost intuition: a `t3.small` is $0.0208/hr. The 100-agent run (~6 minutes median per box) cost about **$1.60 of EC2** and zero marginal inference.
 

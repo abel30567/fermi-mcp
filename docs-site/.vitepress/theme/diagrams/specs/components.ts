@@ -109,6 +109,180 @@ export const components: Record<string, DiagramSpec> = {
 		],
 	},
 
+	neutrinoAccess: {
+		type: 'hub',
+		title: 'Who holds which credential, and what it opens',
+		alt: 'The Worker is the only place long-lived credentials live: the AWS key, the inference tokens, the GitHub token, and fleet config. An MCP host reaches it with an OAuth grant carrying write:fleet, the operator with the admin bearer. The Worker uses the AWS key for exactly three EC2 calls. Each box gets a per-box token in user-data and uses it on /box/*, where it fetches only its route inference token and, if its task names a repo, the GitHub token. Boxes have no AWS credentials. Boxes then call GitHub and the model provider directly.',
+		hubShort: 'Worker',
+		orient: 'v',
+		hub: {
+			title: 'Fermi Worker',
+			sub: 'the only holder of long-lived credentials',
+			tone: 'fermi',
+			items: [
+				{
+					title: 'Secrets store',
+					sub: 'encrypted at rest',
+					lines: [
+						'`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`',
+						'`CLAUDE_CODE_OAUTH_TOKEN[_ACCOUNT]`',
+						'`CPA_AUTH_CODEX` · `CPA_AUTH_XAI` · `CPA_API_KEY`',
+						'`GITHUB_TOKEN`',
+					],
+					tone: 'fermi',
+					kind: 'store',
+					wide: true,
+				},
+				{
+					title: 'KV `fleet:config`',
+					lines: ['region · AMI · `allowed_instance_types`', 'budget · `max_concurrent` · runner pin'],
+					tone: 'fermi',
+					kind: 'store',
+				},
+				{
+					title: 'D1 `boxes`',
+					lines: ['sha256 of each box token', 'destroyed box = revoked token'],
+					tone: 'fermi',
+					kind: 'store',
+				},
+			],
+		},
+		left: [
+			{
+				node: {
+					title: 'Any MCP host',
+					sub: 'OAuth grant with `write:fleet`',
+					lines: ['`cloud_agent_launch` / `stop` / `destroy`'],
+					tone: 'ext',
+				},
+				links: [{ label: 'launch a task', dir: 'next' }],
+			},
+			{
+				node: {
+					title: 'Operator',
+					sub: '`fleetctl`, admin bearer',
+					lines: ['`/admin/fleet/config`', '`/admin/fleet/pin-runner`'],
+					tone: 'human',
+				},
+				links: [{ label: 'set config and pin', dir: 'next' }],
+			},
+		],
+		right: [
+			{
+				node: {
+					title: 'AWS EC2 API',
+					sub: 'one region, IAM key below',
+					lines: [
+						'`RunInstances` + tag on create',
+						'`DescribeInstances`',
+						'`TerminateInstances` (fleet-tagged)',
+					],
+					tone: 'ext',
+				},
+				links: [{ label: 'SigV4 with the AWS key', dir: 'next', dashed: true }],
+			},
+			{
+				node: {
+					title: 'Neutrino box',
+					sub: 'no instance profile, no AWS keys',
+					lines: [
+						'per-box token from user-data',
+						'gets its route token + `GITHUB_TOKEN` (repo tasks only)',
+					],
+					tone: 'agent',
+				},
+				links: [
+					{ label: 'user-data: box token', dir: 'next', dashed: true },
+					{ label: '`/box/*` with the box token', dir: 'prev' },
+				],
+			},
+		],
+		footer: [
+			{
+				label: 'What the box does with what it was handed',
+				nodes: [
+					{ title: 'Neutrino box', lines: ['boot'], tone: 'agent' },
+					{
+						title: 'raw.githubusercontent.com',
+						lines: ['runner files at the pinned SHA', 'no credential, sha256 checked'],
+						tone: 'ext',
+					},
+				],
+				links: [{ label: 'fetch runner', dir: 'next' }],
+			},
+			{
+				nodes: [
+					{ title: 'Neutrino box', lines: ['harness turns'], tone: 'agent' },
+					{
+						title: 'Anthropic / OpenAI / xAI',
+						lines: ['the route token, direct from the box', 'never through your Mac'],
+						tone: 'ext',
+					},
+				],
+				links: [{ label: 'inference', dir: 'next' }],
+			},
+			{
+				nodes: [
+					{ title: 'Neutrino box', lines: ['task names a repo'], tone: 'agent' },
+					{
+						title: 'GitHub',
+						lines: ['`GITHUB_TOKEN`: clone, push, open PR', 'commits as `fermi-neutrino`'],
+						tone: 'ext',
+					},
+				],
+				links: [{ label: 'git', dir: 'both' }],
+			},
+		],
+	},
+
+	neutrinoAccessFlow: {
+		type: 'sequence',
+		title: 'A launch, credential by credential',
+		alt: 'The host launches with its OAuth grant. The Worker checks budget, concurrency and the runner pin, mints a box token and stores only its hash, then calls RunInstances with the AWS key, tagging the instance fermi-fleet. The box fetches the pinned runner without credentials, then uses its box token to claim the task and fetch its inference token and, for repo tasks, the GitHub token. It calls the model and GitHub directly, uploads artifacts and completes through /box/*. The reaper uses DescribeInstances and TerminateInstances, and marks the box destroyed, which revokes its token.',
+		participants: [
+			{ id: 'h', label: 'MCP host', short: 'Host', tone: 'ext' },
+			{ id: 'w', label: 'Worker', sub: 'secrets · KV · D1', tone: 'fermi' },
+			{ id: 'a', label: 'AWS EC2 API', short: 'EC2', tone: 'ext' },
+			{ id: 'b', label: 'Neutrino box', short: 'Box', tone: 'agent' },
+			{ id: 'x', label: 'GitHub + model API', short: 'GitHub/LLM', tone: 'ext' },
+		],
+		steps: [
+			{ from: 'h', to: 'w', label: '`cloud_agent_launch` (OAuth, `write:fleet`)' },
+			{ from: 'w', to: 'w', label: 'budget, concurrency, size, runner pin ok?', tone: 'human' },
+			{ from: 'w', to: 'w', label: 'mint box token, keep only its sha256' },
+			{
+				from: 'w',
+				to: 'a',
+				label: '`RunInstances` + tags `fermi-fleet=true` (AWS key, SigV4)',
+			},
+			{ from: 'a', to: 'b', label: 'boots the AMI, user-data carries the box token' },
+			{ from: 'b', to: 'x', label: 'fetch runner at pinned SHA (no credential, sha256)' },
+			{ from: 'b', to: 'w', label: '`/box/poll` (box token) → claims its task' },
+			{ from: 'b', to: 'w', label: '`/box/inference-auth` (box token)' },
+			{
+				from: 'w',
+				to: 'b',
+				label: 'route token only; `GITHUB_TOKEN` only if the task names a repo',
+				reply: true,
+			},
+			{ from: 'b', to: 'x', label: 'inference with the route token; clone/push with `GITHUB_TOKEN`' },
+			{
+				from: 'b',
+				to: 'w',
+				label: '`/box/artifact` · `/box/heartbeat` · `/box/complete` (box token)',
+			},
+			{ note: 'reaper cron, every 5 min', over: ['w'] },
+			{ from: 'w', to: 'a', label: '`TerminateInstances` (only `fermi-fleet`-tagged)' },
+			{ from: 'w', to: 'a', label: '`DescribeInstances`: confirm gone, sweep orphans' },
+			{
+				from: 'w',
+				to: 'w',
+				label: 'mark box destroyed = box token revoked',
+				tone: 'pass',
+			},
+		],
+	},
+
 	sessionBroker: {
 		type: 'sequence',
 		title: 'Cookies never leave home',
