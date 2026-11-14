@@ -19,19 +19,7 @@ The cloud browser lane (Cloudflare Browser Rendering) is a datacenter IP with an
 
 ## How the bridge works
 
-```mermaid
-sequenceDiagram
-    participant H as Any MCP host (phone, laptop)
-    participant W as Worker
-    participant T as Cloudflare Tunnel
-    participant M as MacOSMCP on the Mac
-    H->>W: mac_browser_action(...)
-    W->>W: guardrails (risk: high → approval token?)
-    W->>T: MCP tools/call, Bearer MACOS_MCP_TOKEN
-    T->>M: forward
-    M-->>W: result (or timeout)
-    W-->>H: result — or {error: "agent_offline"} if the Mac is away
-```
+<Diagram id="macosBridge" />
 
 The Worker registers `mac_*` tools **only when `MACOS_MCP_URL` is set** — no Mac configured, no tools listed. The bridge caches the MCP handshake and degrades to `agent_offline` instead of throwing when the tunnel is down.
 

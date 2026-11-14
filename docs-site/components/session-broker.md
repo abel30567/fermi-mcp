@@ -8,26 +8,7 @@ Fleet agents frequently need *your logged-in web sessions* — check an inbox, d
 
 ## The design: cookies never leave home
 
-```mermaid
-sequenceDiagram
-    participant B as Neutrino (EC2)
-    participant W as Worker (control plane)
-    participant M as Mac broker executor
-    participant S as The website
-    Note over M: the ONLY party that ever sees decrypted storageState
-    B->>W: POST /box/session-lease {name: "gmail"}
-    W-->>B: {mode: "broker", session, site} — a HANDLE, zero cookies
-    B->>W: POST /box/browser-rpc {session, op: "extract", args}
-    W->>W: launch named this session? still valid? origin on-site?
-    W->>W: enqueue op on broker:ops
-    M->>W: POST /admin/broker/claim (Bearer)
-    W-->>M: the op
-    M->>W: GET /admin/session/state → decrypted storageState
-    M->>S: Playwright, residential IP, real fingerprint
-    M->>W: POST /admin/broker/complete {data}
-    B->>W: POST /box/browser-rpc/wait {op_id}
-    W-->>B: text / screenshot — never session material
-```
+<Diagram id="sessionBroker" />
 
 ## The rules, each with its enforcement point
 

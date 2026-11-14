@@ -2,10 +2,7 @@
 
 Fermi is adopted in tiers. Each tier is fully useful on its own; each adds one trust decision and one operational burden. The rule from tier to tier: **if the current tier can't complete its own success checklist, don't add the next one.**
 
-```mermaid
-flowchart LR
-    T1["Tier 1<br/>Worker only"] --> T2["Tier 2<br/>+ Daemon"] --> T3["Tier 3<br/>+ MacOSMCP"] --> T4["Tier 4<br/>+ Neutrinos"] --> T5["Tier 5<br/>multi-daemon"]
-```
+<Diagram id="tiers" />
 
 ## Tier 1 — Worker only (easy)
 

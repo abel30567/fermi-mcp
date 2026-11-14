@@ -35,23 +35,6 @@ features:
 
 You already pay for a frontier model. Fermi is the part the subscription doesn't give you: **a persistent self you control** — memory that survives the chat window, skills that crystallize from experience, credentials that stay yours, and compute that scales past one laptop.
 
-```mermaid
-flowchart LR
-    subgraph hosts["Any MCP host"]
-      A["Claude.ai / Desktop / Code / Cursor"]
-    end
-    subgraph cf["Cloudflare (yours, ~$5/mo)"]
-      W["Fermi Worker<br/>memory · skills · secrets · tasks"]
-    end
-    subgraph mac["Your Mac (optional)"]
-      D["Daemon + MacOSMCP<br/>real browser · shell · residential IP"]
-    end
-    subgraph aws["AWS (optional, by the minute)"]
-      N["Neutrinos<br/>disposable agent boxes"]
-    end
-    A -->|MCP| W
-    W <-->|tunnel + task queue| D
-    W <-->|box gateway| N
-```
+<Diagram id="pitch" />
 
 Start with just the Worker. Add the Mac when you need hands. Add the fleet when you need a hundred of them.

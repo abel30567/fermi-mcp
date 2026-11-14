@@ -1,6 +1,6 @@
 # Fermi docs site
 
-[VitePress](https://vitepress.dev) + Mermaid. Sources in this directory; published to GitHub Pages by `.github/workflows/docs.yml` on push to `master`.
+[VitePress](https://vitepress.dev) with a custom theme. Sources in this directory; published to GitHub Pages by `.github/workflows/docs.yml` on push to `master`.
 
 ```bash
 cd docs-site
@@ -25,4 +25,5 @@ In repo Settings → Pages, set Source = "GitHub Actions". The `base` in `.vitep
 
 - No personal device names, hostnames, or local paths — use placeholders.
 - Every architectural claim should be checkable against source; cite `file.ts` where practical.
-- Mermaid for diagrams (renders on GitHub Pages via `vitepress-plugin-mermaid`).
+- Diagrams are `<Diagram id="..." />` components with specs in `.vitepress/theme/diagrams/specs/`;
+  colours, fonts and sizes come from the design tokens in `design/` (see `design/README.md`).

@@ -6,20 +6,7 @@ A **neutrino** is a disposable EC2 box born for one task: it boots, claims its t
 
 ## Lifecycle
 
-```mermaid
-stateDiagram-v2
-    [*] --> provisioning: cloud_agent_launch / POST /admin/fleet/launch
-    provisioning --> booting: EC2 RunInstances (user-data = pinned runner fetch)
-    booting --> working: sha256(box-runner.mjs) == pin → poll claims task
-    booting --> failed: pin mismatch → fail closed, /box/report
-    working --> proving: harness done → artifacts uploaded
-    proving --> done: /box/complete accepted (proof passes)
-    proving --> working: 422 proof_unverified → fix or fail honestly
-    working --> failed: honest failure (always accepted, no proof needed to give up)
-    done --> destroyed: reaper / TTL → EC2 Terminate (confirmed before marked)
-    failed --> destroyed
-    destroyed --> [*]
-```
+<Diagram id="neutrinoLifecycle" />
 
 ## How a launch flows through the system
 
