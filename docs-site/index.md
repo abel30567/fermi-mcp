@@ -5,6 +5,10 @@ hero:
   name: Fermi
   text: Your personal AI control plane
   tagline: One MCP server that every AI host shares. A Mac that gives it hands. A disposable cloud fleet when one pair isn't enough.
+  image:
+    light: /logo-light.svg
+    dark: /logo-dark.svg
+    alt: Fermi
   actions:
     - theme: brand
       text: What is Fermi?

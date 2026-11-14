@@ -8,7 +8,9 @@ export default withMermaid(
 			'A personal AI control plane: one MCP server on Cloudflare, a Mac daemon for hands, and a disposable cloud-agent fleet.',
 		base: '/fermi-mcp/',
 		lastUpdated: true,
+		head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/fermi-mcp/favicon.svg' }]],
 		themeConfig: {
+			logo: { light: '/logo-light.svg', dark: '/logo-dark.svg', alt: 'Fermi' },
 			nav: [
 				{ text: 'Guide', link: '/guide/what-is-fermi' },
 				{ text: 'Components', link: '/components/worker' },
