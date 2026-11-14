@@ -87,51 +87,13 @@ There is no D1 migration. Each call's state lives in its Durable Object.
 
 ## How a call works
 
-```mermaid
-sequenceDiagram
-    participant H as Host or daemon lane
-    participant W as Worker, one PhoneCallDO per call
-    participant T as Twilio
-    participant P as Other party
-    participant L as GPT-Live
-    H->>W: phone_call_start with to, goal, context
-    W->>T: create call, inline TwiML Connect + Stream
-    W-->>H: call_id, right away
-    T->>P: rings
-    T->>W: signed status callbacks
-    P-->>T: answers
-    T->>W: opens the media WebSocket
-    W->>L: session.start, mu-law audio, three tools
-    loop while talking
-        T->>W: 20 ms audio frames from the other party
-        W->>L: session.input_audio.append
-        L->>W: session.output_audio.delta
-        W->>T: agent audio back onto the line
-    end
-    L->>W: wait_on_hold
-    W->>L: session.close, nothing billed during the hold
-    Note over W: a small energy detector listens for a person
-    W->>L: new session, replays the greeting
-    L->>W: end_call with outcome and summary
-    W->>T: hang up
-    W->>H: result task for the requesting chat
-```
+<Diagram id="phoneCall" />
 
 Twilio and GPT-Live both speak 8 kHz G.711 μ-law, so audio frames pass through the Worker untouched in both directions. No transcoding, no resampling.
 
 ### The phases of a call
 
-```mermaid
-stateDiagram-v2
-    [*] --> connecting: dialed
-    connecting --> live: media stream starts
-    live --> hold: wait_on_hold
-    hold --> live: speech burst, then silence
-    live --> ended: end_call, or either side hangs up
-    hold --> ended: hang-up or time limit
-    connecting --> ended: no answer, busy, failed
-    ended --> [*]
-```
+<Diagram id="phonePhases" />
 
 ### What the voice model can do
 

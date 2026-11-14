@@ -6,22 +6,7 @@
 
 The Worker cannot run Claude Code. Your Mac can. The daemon closes that gap **pull-only**: the Mac calls out to the Worker, claims tasks, runs the harness locally, and completes them. Without MacOSMCP, nothing on the internet can push into your Mac — the daemon holds an outbound bearer token, no inbound port.
 
-```mermaid
-sequenceDiagram
-    participant CH as Channel (Telegram)
-    participant W as Worker
-    participant P as poll.sh / warm-worker
-    participant H as Claude Code harness
-    CH->>W: message → enqueueTask(queue: main)
-    P->>W: GET /admin/tasks/pending (Bearer)
-    W-->>P: count > 0
-    P->>W: task_claim(queue: main, claimed_by, lease)
-    W-->>P: task {payload, chat_id}
-    P->>H: claude -p "<task>" --allowedTools mcp__claude_ai_Fermi,mcp__playwright
-    H->>W: works via Fermi MCP tools (memory, browser, channel_send)
-    P->>W: task_complete(id, done, result)
-    W->>CH: reply routed back to the chat
-```
+<Diagram id="daemon" />
 
 ## What runs (who owns what)
 

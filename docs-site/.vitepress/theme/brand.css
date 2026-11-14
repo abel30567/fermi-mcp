@@ -1,0 +1,14 @@
+/* Site typography in the Fermi design system (design/tokens.json). Colours come from tokens.css. */
+:root {
+	--vp-font-family-base: var(--fx-font-sans);
+	--vp-font-family-mono: var(--fx-font-mono);
+}
+
+.VPHero .name,
+.VPHero .text,
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+	font-family: var(--fx-font-display);
+	letter-spacing: -0.01em;
+}
