@@ -305,6 +305,14 @@ const defaultHandler = {
 					),
 					codex: routeHealth(agents, 'codex'),
 					grok: routeHealth(agents, 'grok'),
+					antigravity: routeHealth(agents, 'antigravity'),
+					...Object.fromEntries(
+						[
+							...new Set(
+								agents.flatMap((a) => (a.route === 'antigravity' && a.account ? [a.account] : [])),
+							),
+						].map((acct) => [`antigravity:${acct}`, routeHealth(agents, 'antigravity', acct)]),
+					),
 				},
 			})
 		}
@@ -484,6 +492,12 @@ const oauthProvider = new OAuthProvider({
 
 export default {
 	fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> | Response {
+		// /box/mcp uses per-box bearer tokens, never interactive OAuth; advertising
+		// protected-resource metadata for it causes headless MCP clients (like
+		// Antigravity) to run Dynamic Client Registration into OAUTH_KV on every boot.
+		if (new URL(request.url).pathname === '/.well-known/oauth-protected-resource/box/mcp') {
+			return new Response('Not Found', { status: 404 })
+		}
 		if (bypassAuth(request, env)) {
 			return defaultHandler.fetch(request, env, ctx)
 		}

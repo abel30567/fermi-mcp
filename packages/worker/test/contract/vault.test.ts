@@ -230,6 +230,11 @@ describe('tool secret_resolve: box and mission grants (MCP-28)', () => {
 		}
 	})
 
+	it('does not advertise OAuth protected-resource metadata for /box/mcp', async () => {
+		const res = await SELF.fetch('http://fermi.test/.well-known/oauth-protected-resource/box/mcp')
+		expect(res.status).toBe(404)
+	})
+
 	it('mission grant follows the box mission mid-session', async () => {
 		const name = unique('BOX_MISSION')
 		await storeResolvable(name, 'mission-value-123')

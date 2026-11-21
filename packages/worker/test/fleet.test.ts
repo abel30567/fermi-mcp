@@ -459,3 +459,79 @@ describe('alternate Claude account launch checks', () => {
 		})
 	})
 })
+
+describe('antigravity route support', () => {
+	const base = {
+		prompt: 'build feature X end to end',
+		proof_contract: '{"kind":"artifact","name":"out.txt","min_bytes":1}',
+	}
+	beforeAll(async () => {
+		await setupFleetSchema()
+		await setupSecretsSchema()
+	})
+	beforeEach(async () => {
+		await clearFleet()
+		await clearSecrets()
+		await env.FERMI_KV.delete('fleet:config')
+	})
+
+	it('persists route="antigravity" in cloud_agents via migration 0028', async () => {
+		const row = await createCloudAgent(env.FERMI_DB, {
+			id: 'ca_agy',
+			queue: 'agent:ca_agy',
+			prompt: 'run subagents',
+			proofContract: base.proof_contract,
+			route: 'antigravity',
+			account: 'alt',
+		})
+		expect(row).toMatchObject({ id: 'ca_agy', route: 'antigravity', account: 'alt' })
+		expect((await getCloudAgent(env.FERMI_DB, 'ca_agy'))?.route).toBe('antigravity')
+	})
+
+	it('accepts route="antigravity" and account in cloudAgentLaunchSchema', () => {
+		const schema = z.object(cloudAgentLaunchSchema)
+		const parsed = schema.parse({ ...base, route: 'antigravity', account: 'alt' })
+		expect(parsed.route).toBe('antigravity')
+		expect(parsed.account).toBe('alt')
+	})
+
+	it('fails at launch when an alternate antigravity account token secret is missing', async () => {
+		expect(await launchCloudAgent(env, { ...base, route: 'antigravity', account: 'alt' })).toEqual({
+			ok: false,
+			error: 'account_token_not_configured',
+			missing: ['AGY_ACP_TOKEN_ALT'],
+		})
+	})
+
+	it('validates and stores antigravity_model in fleet:config', async () => {
+		const config = await getFleetConfig(env)
+		expect(config.antigravity_model).toBe('gemini-4-neon')
+		expect(validateFleetConfigPatch(config, { antigravity_model: '' })).toMatchObject({ ok: false })
+		const res = await updateFleetConfig(env, { antigravity_model: 'gemini-4-carbon' })
+		expect(res.ok).toBe(true)
+		expect((await getFleetConfig(env)).antigravity_model).toBe('gemini-4-carbon')
+	})
+
+	it('tracks antigravity and antigravity:<account> health independently', () => {
+		const agy = (p: Partial<CloudAgentRow>): CloudAgentRow =>
+			({
+				route: 'antigravity',
+				status: 'failed',
+				ended_at: 1,
+				exit_reason: 'harness api_error 429: quota exceeded',
+				account: null,
+				...p,
+			}) as CloudAgentRow
+		const agents = [
+			agy({ ended_at: 30 }),
+			agy({ ended_at: 20 }),
+			agy({ ended_at: 10 }),
+			agy({ account: 'alt', ended_at: 40, status: 'done', exit_reason: 'completed' }),
+		]
+		expect(routeHealth(agents, 'antigravity').unavailable).toBe(true)
+		expect(routeHealth(agents, 'antigravity', 'alt')).toMatchObject({
+			unavailable: false,
+			consecutive_api_errors: 0,
+		})
+	})
+})
