@@ -7,6 +7,7 @@ import {
 } from './fleet-config.ts'
 import {
 	CLAUDE_ACCOUNT_RE,
+	antigravityTokenSecretName,
 	claudeTokenSecretName,
 	createCloudAgent,
 	getBox,
@@ -19,9 +20,9 @@ import { enqueueTask } from './task-store.ts'
 export interface LaunchInput {
 	prompt: string
 	proof_contract: string
-	route?: 'claude' | 'codex' | 'grok'
+	route?: 'claude' | 'codex' | 'grok' | 'antigravity'
 	model?: string
-	/** Alternate Claude account (claude route only), e.g. 'kayo' → secret CLAUDE_CODE_OAUTH_TOKEN_KAYO. */
+	/** Alternate subscription account (claude → CLAUDE_CODE_OAUTH_TOKEN_<ACCOUNT>; antigravity → AGY_ACP_TOKEN_<ACCOUNT>). */
 	account?: string
 	box_id?: string
 	budget_usd?: number
@@ -57,13 +58,17 @@ export async function launchCloudAgent(env: Env, input: LaunchInput): Promise<La
 
 	// Fail at launch, not at box boot, when the account's token is missing.
 	if (input.account) {
-		if ((input.route ?? 'claude') !== 'claude') {
+		const route = input.route ?? 'claude'
+		if (route !== 'claude' && route !== 'antigravity') {
 			return { ok: false, error: 'account_requires_claude_route' }
 		}
 		if (!CLAUDE_ACCOUNT_RE.test(input.account)) {
 			return { ok: false, error: 'invalid_account', account: input.account }
 		}
-		const secretName = claudeTokenSecretName(input.account)
+		const secretName =
+			route === 'antigravity'
+				? antigravityTokenSecretName(input.account)
+				: claudeTokenSecretName(input.account)
 		if (!(await getSecret(secretName, 'app', '', env))) {
 			return { ok: false, error: 'account_token_not_configured', missing: [secretName] }
 		}

@@ -1,6 +1,7 @@
 import { accruedCostUsd, getFleetConfig } from '../lib/fleet-config.ts'
 import type { BoxRow } from '../lib/fleet-store.ts'
 import {
+	antigravityTokenSecretName,
 	claudeTokenSecretName,
 	getBox,
 	getCloudAgent,
@@ -25,12 +26,14 @@ const ROUTE_SECRETS: Record<string, string[]> = {
 	claude: ['CLAUDE_CODE_OAUTH_TOKEN'],
 	codex: ['CPA_AUTH_CODEX', 'CPA_API_KEY'],
 	grok: ['CPA_AUTH_XAI', 'CPA_API_KEY'],
+	antigravity: ['AGY_ACP_TOKEN'],
 }
 // The one bundle a box may write back, derived from its mission's route.
 // Routes absent here (claude) have nothing writable.
 const ROUTE_WRITABLE_BUNDLE: Record<string, string> = {
 	codex: 'CPA_AUTH_CODEX',
 	grok: 'CPA_AUTH_XAI',
+	antigravity: 'AGY_ACP_TOKEN',
 }
 const MAX_BUNDLE_BYTES = 65_536
 
@@ -265,7 +268,11 @@ export async function handleBoxInferenceAuth(request: Request, env: Env): Promis
 	// An alternate Claude account reads its own secret but hands it to the box
 	// under the standard name, so the runner is account-agnostic.
 	const sourceName = (name: string) =>
-		name === 'CLAUDE_CODE_OAUTH_TOKEN' ? claudeTokenSecretName(agent.account) : name
+		name === 'CLAUDE_CODE_OAUTH_TOKEN'
+			? claudeTokenSecretName(agent.account)
+			: name === 'AGY_ACP_TOKEN'
+				? antigravityTokenSecretName(agent.account)
+				: name
 
 	const writable = ROUTE_WRITABLE_BUNDLE[agent.route]
 	const values: Record<string, string> = {}
@@ -324,9 +331,11 @@ export async function handleBoxInferenceAuthUpdate(request: Request, env: Env): 
 		return badBundle('versions must carry the integer version served by /box/inference-auth')
 	}
 
-	const next = await updateAppSecretIfVersion(name, value, version, env)
+	const targetName =
+		name === 'AGY_ACP_TOKEN' && agent ? antigravityTokenSecretName(agent.account) : name
+	const next = await updateAppSecretIfVersion(targetName, value, version, env)
 	if (next === null) {
-		const current = await getSecret(name, 'app', '', env)
+		const current = await getSecret(targetName, 'app', '', env)
 		return Response.json(
 			{ ok: false, error: 'stale_bundle', current_version: current?.metadata.updated_at ?? null },
 			{ status: 409 },

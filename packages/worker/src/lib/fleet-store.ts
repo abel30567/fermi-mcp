@@ -19,7 +19,7 @@ export interface CloudAgentRow {
 	task_id: string | null
 	queue: string
 	status: 'launching' | 'running' | 'waiting_human' | 'done' | 'failed' | 'destroyed'
-	route: 'claude' | 'codex' | 'grok'
+	route: 'claude' | 'codex' | 'grok' | 'antigravity'
 	prompt: string
 	proof_contract: string
 	budget_usd: number | null
@@ -36,7 +36,7 @@ export interface CloudAgentRow {
 	/** Liveness (#42): last `working:` progress note, and runner restarts seen. */
 	last_working_event_at: number | null
 	restart_count: number
-	/** Alternate Claude account (claude route only); null = default token. */
+	/** Alternate subscription account (claude or antigravity route); null = default token. */
 	account: string | null
 }
 
@@ -46,6 +46,11 @@ export const CLAUDE_ACCOUNT_RE = /^[a-z][a-z0-9_]{0,31}$/
 /** Fermi secret holding the Claude Code OAuth token for an account (null = default). */
 export function claudeTokenSecretName(account: string | null): string {
 	return account ? `CLAUDE_CODE_OAUTH_TOKEN_${account.toUpperCase()}` : 'CLAUDE_CODE_OAUTH_TOKEN'
+}
+
+/** Fermi secret holding the Antigravity ACP OAuth bundle for an account (null = default). */
+export function antigravityTokenSecretName(account: string | null): string {
+	return account ? `AGY_ACP_TOKEN_${account.toUpperCase()}` : 'AGY_ACP_TOKEN'
 }
 
 /** Agent record plus its box's heartbeat, so clients check liveness without parsing events (#42). */

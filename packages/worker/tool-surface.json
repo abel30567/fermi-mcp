@@ -1190,7 +1190,8 @@
 					"enum": [
 						"claude",
 						"codex",
-						"grok"
+						"grok",
+						"antigravity"
 					],
 					"default": "claude",
 					"description": "Inference route for the agent harness"
@@ -1202,7 +1203,7 @@
 				"account": {
 					"type": "string",
 					"pattern": "^[a-z][a-z0-9_]{0,31}$",
-					"description": "Alternate Claude account for the claude route (e.g. kayo → secret CLAUDE_CODE_OAUTH_TOKEN_KAYO). Omit for the default account. Check routes in fleet status to pick one that is not capped."
+					"description": "Alternate subscription account for claude (CLAUDE_CODE_OAUTH_TOKEN_<ACCOUNT>) or antigravity (AGY_ACP_TOKEN_<ACCOUNT>). Omit for the default account. Check routes in fleet status to pick one that is not capped."
 				},
 				"box_id": {
 					"type": "string",

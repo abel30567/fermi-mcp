@@ -48,6 +48,20 @@ describe('runner boot pin (#34)', () => {
 		expect(userData()).not.toContain('fermi-daemon/main/')
 	})
 
+	it('user-data emits ROUTE=antigravity, ANTIGRAVITY_MODEL, and verified binary fallback for antigravity boxes', () => {
+		const script = userData({
+			route: 'antigravity',
+			claudeModel: null,
+			antigravityModel: 'gemini-4-neon',
+		})
+		expect(script).toContain('ROUTE=antigravity')
+		expect(script).toContain('ANTIGRAVITY_MODEL=gemini-4-neon')
+		expect(script).toContain('/opt/fermi/antigravity/antigravity')
+		expect(script).toContain('sha512sum -c -')
+		expect(script).not.toContain('CLAUDE_MODEL=')
+		expect(userData()).not.toContain('/opt/fermi/antigravity/antigravity')
+	})
+
 	it('dispatchProvision refuses launch when the runner pin is unset', async () => {
 		await env.FERMI_KV.put(
 			'fleet:config',
