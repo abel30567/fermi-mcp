@@ -16,6 +16,7 @@ export interface FleetConfig {
 	/** Per-launch `instance_type` overrides must come from this list (#43). */
 	allowed_instance_types: string[]
 	claude_model: string
+	antigravity_model: string
 	default_env: string | null
 	mcp_base_url: string | null
 	/** Supply-chain pin for the box-runner boot download (#34); launch refuses when unset. */
@@ -38,6 +39,7 @@ const DEFAULTS: FleetConfig = {
 	instance_type: 't3.small',
 	allowed_instance_types: ['t3.small', 't3.medium', 't3.large'],
 	claude_model: 'claude-opus-4-6[1m]',
+	antigravity_model: 'gemini-4-neon-high',
 	default_env: null,
 	mcp_base_url: null,
 	runner_ref: null,
@@ -94,6 +96,7 @@ export type FleetConfigPatch = Partial<
 		| 'monthly_budget_usd'
 		| 'default_ttl_seconds'
 		| 'claude_model'
+		| 'antigravity_model'
 	>
 >
 
@@ -112,6 +115,7 @@ export function validateFleetConfigPatch(
 		switch (key) {
 			case 'instance_type':
 			case 'claude_model':
+			case 'antigravity_model':
 				if (typeof v !== 'string' || v.length === 0 || v.length > 64)
 					return { ok: false, error: `${key} must be a non-empty string` }
 				patch[key] = v

@@ -305,6 +305,14 @@ const defaultHandler = {
 					),
 					codex: routeHealth(agents, 'codex'),
 					grok: routeHealth(agents, 'grok'),
+					antigravity: routeHealth(agents, 'antigravity'),
+					...Object.fromEntries(
+						[
+							...new Set(
+								agents.flatMap((a) => (a.route === 'antigravity' && a.account ? [a.account] : [])),
+							),
+						].map((acct) => [`antigravity:${acct}`, routeHealth(agents, 'antigravity', acct)]),
+					),
 				},
 			})
 		}

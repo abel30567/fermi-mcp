@@ -56,7 +56,7 @@ export const cloudAgentLaunchSchema = {
 			'JSON contract checked mechanically: {"kind":"artifact","name",...} | {"kind":"http","url",...} | {"kind":"test","cmd",...} | {"kind":"dom","url","selector",...}. Free text is rejected.',
 		),
 	route: z
-		.enum(['claude', 'codex', 'grok'])
+		.enum(['claude', 'codex', 'grok', 'antigravity'])
 		.optional()
 		.default('claude')
 		.describe('Inference route for the agent harness'),
@@ -66,7 +66,7 @@ export const cloudAgentLaunchSchema = {
 		.regex(CLAUDE_ACCOUNT_RE)
 		.optional()
 		.describe(
-			'Alternate Claude account for the claude route (e.g. kayo → secret CLAUDE_CODE_OAUTH_TOKEN_KAYO). Omit for the default account. Check routes in fleet status to pick one that is not capped.',
+			'Alternate subscription account for claude (CLAUDE_CODE_OAUTH_TOKEN_<ACCOUNT>) or antigravity (AGY_ACP_TOKEN_<ACCOUNT>). Omit for the default account. Check routes in fleet status to pick one that is not capped.',
 		),
 	box_id: z
 		.string()

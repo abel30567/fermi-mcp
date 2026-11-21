@@ -463,7 +463,11 @@ describe('box gateway', () => {
 describe('box inference-auth writeback', () => {
 	const OLD = '{"refresh_token":"old"}'
 
-	async function seedRouteBox(boxId: string, route?: 'claude' | 'codex' | 'grok'): Promise<void> {
+	async function seedRouteBox(
+		boxId: string,
+		route?: 'claude' | 'codex' | 'grok' | 'antigravity',
+		account?: string,
+	): Promise<void> {
 		const agentId = `ca_${boxId}`
 		await registerBox(env.FERMI_DB, {
 			boxId,
@@ -476,6 +480,7 @@ describe('box inference-auth writeback', () => {
 				prompt: 'p',
 				proofContract: 'pc',
 				route,
+				...(account ? { account } : {}),
 			})
 		}
 	}
@@ -653,5 +658,64 @@ describe('box inference-auth writeback', () => {
 		)
 		expect(raw.status).toBe(400)
 		expect(await storedValue('CPA_AUTH_CODEX')).toBe(OLD)
+	})
+
+	it('serves and CAS-updates AGY_ACP_TOKEN for antigravity boxes, isolating alternate accounts', async () => {
+		const DEFAULT_TOK = '{"refresh_token":"agy-default"}'
+		const ALT_TOK = '{"refresh_token":"agy-alt"}'
+		await seedRouteBox('box-agy', 'antigravity')
+		await seedRouteBox('box-agy-alt', 'antigravity', 'alt')
+
+		const missingDefault = await handleBoxInferenceAuth(
+			req('/box/inference-auth', {}, `box-agy.${SECRET}`),
+			env,
+		)
+		expect(missingDefault.status).toBe(409)
+		expect(await missingDefault.json()).toMatchObject({ missing: ['AGY_ACP_TOKEN'] })
+
+		await putSecret({ name: 'AGY_ACP_TOKEN', scope: 'app', value: DEFAULT_TOK }, env)
+		const missingAlt = await handleBoxInferenceAuth(
+			req('/box/inference-auth', {}, `box-agy-alt.${SECRET}`),
+			env,
+		)
+		expect(missingAlt.status).toBe(409)
+		expect(await missingAlt.json()).toMatchObject({ missing: ['AGY_ACP_TOKEN_ALT'] })
+
+		await putSecret({ name: 'AGY_ACP_TOKEN_ALT', scope: 'app', value: ALT_TOK }, env)
+		const altRes = await handleBoxInferenceAuth(
+			req('/box/inference-auth', {}, `box-agy-alt.${SECRET}`),
+			env,
+		)
+		expect(altRes.status).toBe(200)
+		const altJson = (await altRes.json()) as {
+			route: string
+			secrets: Record<string, string>
+			versions: Record<string, number>
+		}
+		expect(altJson.route).toBe('antigravity')
+		expect(altJson.secrets).toEqual({ AGY_ACP_TOKEN: ALT_TOK })
+		expect(Number.isSafeInteger(altJson.versions.AGY_ACP_TOKEN)).toBe(true)
+
+		// Alternate-account writeback updates AGY_ACP_TOKEN_ALT only.
+		const rotatedAlt = '{"refresh_token":"agy-alt-v2"}'
+		const up = await update('box-agy-alt', {
+			secrets: { AGY_ACP_TOKEN: rotatedAlt },
+			versions: { AGY_ACP_TOKEN: altJson.versions.AGY_ACP_TOKEN },
+		})
+		expect(up.status).toBe(200)
+		expect(await storedValue('AGY_ACP_TOKEN_ALT')).toBe(rotatedAlt)
+		expect(await storedValue('AGY_ACP_TOKEN')).toBe(DEFAULT_TOK)
+
+		// Stale version gets 409, and cross-route bundle gets 403.
+		const stale = await update('box-agy-alt', {
+			secrets: { AGY_ACP_TOKEN: '{"refresh_token":"stale"}' },
+			versions: { AGY_ACP_TOKEN: altJson.versions.AGY_ACP_TOKEN },
+		})
+		expect(stale.status).toBe(409)
+		const wrongBundle = await update('box-agy-alt', {
+			secrets: { CPA_AUTH_CODEX: '{"refresh_token":"hijack"}' },
+			versions: { CPA_AUTH_CODEX: 1 },
+		})
+		expect(wrongBundle.status).toBe(403)
 	})
 })

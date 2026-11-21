@@ -22,6 +22,7 @@ export function bootstrapUserData(opts: {
 	mcpBaseUrl: string | null
 	boxToken: string
 	claudeModel: string | null
+	antigravityModel?: string | null
 	runnerPin: RunnerPin
 	harness?: HarnessPin | null
 }): string {
@@ -46,6 +47,9 @@ export function bootstrapUserData(opts: {
 		`FERMI_BOX_TOKEN=${opts.boxToken}`,
 		...(opts.mcpBaseUrl ? [`FERMI_URL=${opts.mcpBaseUrl}`] : []),
 		...(opts.route === 'claude' && opts.claudeModel ? [`CLAUDE_MODEL=${opts.claudeModel}`] : []),
+		...(opts.route === 'antigravity' && opts.antigravityModel
+			? [`ANTIGRAVITY_MODEL=${opts.antigravityModel}`]
+			: []),
 		'EOF',
 		// hbar (ISSUE-89): claude route only, and only when the box can reach the
 		// server; without a pin the user-data is unchanged.
@@ -118,6 +122,7 @@ export async function dispatchProvision(env: Env, agent: CloudAgentRow): Promise
 			ttlSeconds,
 			mcpBaseUrl: config.mcp_base_url ?? null,
 			claudeModel: agent.route === 'claude' ? config.claude_model : null,
+			antigravityModel: agent.route === 'antigravity' ? config.antigravity_model : null,
 			boxToken: `${boxId}.${boxSecret}`,
 			runnerPin,
 			harness: harnessPinFromConfig(config),
