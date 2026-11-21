@@ -61,6 +61,26 @@ export function bootstrapUserData(opts: {
 					}),
 				]
 			: []),
+		// Antigravity CLI v1.5.14 fallback: no-op when already baked into the AMI,
+		// otherwise fetches the official SHA-512-verified single binary (~101 MB).
+		...(opts.route === 'antigravity'
+			? [
+					'if [ ! -x /opt/fermi/antigravity/antigravity ]; then',
+					'  case "$(uname -m)" in',
+					'    x86_64|amd64) AGY_URL="https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.14-5302690847260672/linux-x64/cli_linux_x64.tar.gz"; AGY_SHA512="83311d3f354567612dc16c1ae2ea9b503d6f6833aa4e138d39aa229da3f3bb99b0e4d7cca0bce4796b0060d6a51d8113eb7449ed5dc0e7900bf217107ea5bff9" ;;',
+					'    aarch64|arm64) AGY_URL="https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.14-5302690847260672/linux-arm/cli_linux_arm64.tar.gz"; AGY_SHA512="c9b29bba475f63a1a80161ae93ba72b221c7a586d9851e4d0061546704bab66d6b2760b25d716d191724fc7564f3246456ee151e28aa37af48dbcd72bdc6c463" ;;',
+					'    *) echo "unsupported arch for antigravity: $(uname -m)" >&2; exit 1 ;;',
+					'  esac',
+					'  AGY_TMP=$(mktemp -d)',
+					'  curl -fsSL --retry 4 --retry-delay 2 "$AGY_URL" -o "$AGY_TMP/agy.tar.gz"',
+					'  echo "$AGY_SHA512  $AGY_TMP/agy.tar.gz" | sha512sum -c -',
+					'  mkdir -p /opt/fermi/antigravity',
+					'  tar -xzf "$AGY_TMP/agy.tar.gz" -C /opt/fermi/antigravity',
+					'  chmod 0755 /opt/fermi/antigravity/antigravity && chmod -R a+rX /opt/fermi/antigravity',
+					'  rm -rf "$AGY_TMP"',
+					'fi',
+				]
+			: []),
 		// Baked AMIs ship a fermi-runner systemd unit that reads /etc/fermi/box.env.
 		'systemctl start fermi-runner 2>/dev/null || true',
 	].join('\n')

@@ -39,7 +39,7 @@ const DEFAULTS: FleetConfig = {
 	instance_type: 't3.small',
 	allowed_instance_types: ['t3.small', 't3.medium', 't3.large'],
 	claude_model: 'claude-opus-4-6[1m]',
-	antigravity_model: 'gemini-4-neon-high',
+	antigravity_model: 'gemini-4-neon',
 	default_env: null,
 	mcp_base_url: null,
 	runner_ref: null,

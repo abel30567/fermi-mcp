@@ -505,11 +505,11 @@ describe('antigravity route support', () => {
 
 	it('validates and stores antigravity_model in fleet:config', async () => {
 		const config = await getFleetConfig(env)
-		expect(config.antigravity_model).toBe('gemini-4-neon-high')
+		expect(config.antigravity_model).toBe('gemini-4-neon')
 		expect(validateFleetConfigPatch(config, { antigravity_model: '' })).toMatchObject({ ok: false })
-		const res = await updateFleetConfig(env, { antigravity_model: 'gemini-4-neon-medium' })
+		const res = await updateFleetConfig(env, { antigravity_model: 'gemini-4-carbon' })
 		expect(res.ok).toBe(true)
-		expect((await getFleetConfig(env)).antigravity_model).toBe('gemini-4-neon-medium')
+		expect((await getFleetConfig(env)).antigravity_model).toBe('gemini-4-carbon')
 	})
 
 	it('tracks antigravity and antigravity:<account> health independently', () => {
