@@ -4,7 +4,7 @@ Where credentials live, where they stop, and what each boundary is worth. Number
 
 ## Layer 1 — Transport auth into the Worker
 
-`/mcp`/`/sse` are wrapped in OAuth (owner secret + optional TOTP at consent) unless `FERMI_LOCAL_DEV` is exactly `true` (local dev only). Channel webhooks verify platform secrets. `/admin/*` demands the bearer token; `/box/*` demands a valid per-box token. *Enforcement: `src/index.ts`, `authBox` in `box-gateway.ts`.*
+`/mcp`/`/sse` are wrapped in OAuth (owner secret + optional TOTP at consent) unless `FERMI_LOCAL_DEV` is exactly `true` (local dev only). Channel webhooks verify platform secrets. `/admin/*` demands the bearer token; `/box/*` demands a valid per-box token; `/k/mcp` demands a live knowledge token and binds each session id to the token that opened it. *Enforcement: `src/index.ts`, `authBox` in `box-gateway.ts`, `authKnowledge` in `lib/knowledge-store.ts`.*
 
 ## Layer 2 — The tool guardrail pipeline
 

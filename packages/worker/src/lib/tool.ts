@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import type { FermiMCP } from '../mcp/index.ts'
 import { executeHooks } from '../orchestration/hooks.ts'
-import { hashArgs, measureResultBytes, writeAudit } from './audit.ts'
+import { hashArgs, measureResultBytes, writeAudit as writeAuditRow } from './audit.ts'
 import { isBoxAllowedTool } from './box-scope.ts'
+import { isKnowledgeAllowedTool } from './knowledge-scope.ts'
 
 export type ToolScope =
 	| 'read'
@@ -69,6 +70,8 @@ export interface RunWithGuardrailsOpts<R> {
 	approvalToken?: string
 	planModeExempt?: boolean
 	approvalPolicy: ApprovalPolicy
+	/** Who is calling, written to every audit row (set for knowledge sessions). */
+	caller?: { principal: string; token_id: string; namespace: string }
 	handler: (args: Record<string, unknown>) => Promise<R>
 }
 
@@ -78,6 +81,8 @@ export async function runWithGuardrails<R>(
 	const { def, args, env, agentState, approvalToken, planModeExempt, approvalPolicy, handler } =
 		opts
 	const argsHash = await hashArgs(args)
+	const writeAudit: typeof writeAuditRow = (db, entry) =>
+		writeAuditRow(db, { ...entry, ...opts.caller })
 
 	if (agentState?.mode === 'plan' && def.mutates && !planModeExempt) {
 		await writeAudit(env.FERMI_DB, {
@@ -219,6 +224,13 @@ export function defineTool<T extends Record<string, z.ZodType>>(agent: FermiMCP,
 			approvalToken: approval_token as string | undefined,
 			planModeExempt: PLAN_MODE_EXEMPT.has(def.name),
 			approvalPolicy: def.risk === 'high' ? 'pending_token' : 'none',
+			caller: agent.knowledge
+				? {
+						principal: 'knowledge',
+						token_id: agent.knowledge.tokenId,
+						namespace: agent.knowledge.namespace,
+					}
+				: undefined,
 			handler: (a) => def.handler(a as z.infer<z.ZodObject<T>>, env),
 		})
 
@@ -296,6 +308,8 @@ export function defineTool<T extends Record<string, z.ZodType>>(agent: FermiMCP,
 	// a leaked box token cannot escalate, move laterally, read the owner's
 	// machine or transcripts, or persist — because those tools never register.
 	if (agent.principal === 'box' && !isBoxAllowedTool(def.name)) return
+	// Knowledge sessions (/k/mcp) likewise register only their allowlist.
+	if (agent.principal === 'knowledge' && !isKnowledgeAllowedTool(def.name)) return
 
 	// biome-ignore lint/suspicious/noExplicitAny: generic MCP callback bridge
 	agent.server.tool(def.name, def.description, schema, wrappedHandler as any)

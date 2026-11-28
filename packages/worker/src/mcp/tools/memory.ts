@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { recallKnowledgeMemories, writeKnowledgeMemory } from '../../lib/knowledge-store.ts'
 import {
 	deleteMemory,
 	listRecentMemories,
@@ -29,7 +30,10 @@ export function registerMemoryTools(agent: FermiMCP) {
 		risk: 'low',
 		mutates: false,
 		handler: async (args, env) => {
-			const results = await recallMemories(args.query, args.limit, env, args.sort_by)
+			const ns = agent.knowledge?.namespace
+			const results = ns
+				? await recallKnowledgeMemories(ns, args.query, args.limit, env, args.sort_by)
+				: await recallMemories(args.query, args.limit, env, args.sort_by)
 			return {
 				content: [
 					{
@@ -87,7 +91,8 @@ export function registerMemoryTools(agent: FermiMCP) {
 		risk: 'low',
 		mutates: true,
 		handler: async (args, env) => {
-			const written = await writeMemory(args, env)
+			const ns = agent.knowledge?.namespace
+			const written = ns ? await writeKnowledgeMemory(ns, args, env) : await writeMemory(args, env)
 			return {
 				content: [{ type: 'text' as const, text: JSON.stringify(written) }],
 			}

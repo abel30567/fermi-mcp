@@ -15,11 +15,14 @@ export async function writeAudit(
 		duration_ms?: number
 		result_bytes?: number
 		session_id?: string
+		principal?: string
+		token_id?: string
+		namespace?: string
 	},
 ): Promise<void> {
 	await db
 		.prepare(
-			'INSERT INTO audit (ts, tool, args_hash, outcome, risk, approved_by, duration_ms, result_bytes, session_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)',
+			'INSERT INTO audit (ts, tool, args_hash, outcome, risk, approved_by, duration_ms, result_bytes, session_id, principal, token_id, namespace) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)',
 		)
 		.bind(
 			Date.now(),
@@ -31,6 +34,9 @@ export async function writeAudit(
 			entry.duration_ms ?? null,
 			entry.result_bytes ?? null,
 			entry.session_id ?? null,
+			entry.principal ?? null,
+			entry.token_id ?? null,
+			entry.namespace ?? null,
 		)
 		.run()
 }

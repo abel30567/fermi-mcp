@@ -9,10 +9,19 @@ import {
 import { getCapability } from '../../lib/capability.ts'
 import { getConnector, listConnectors } from '../../lib/connectors-store.ts'
 import { embedText } from '../../lib/embeddings.ts'
+import {
+	getKnowledgeMemory,
+	getKnowledgeSkill,
+	recallKnowledgeMemories,
+	searchKnowledgeSkills,
+} from '../../lib/knowledge-store.ts'
+import type { MemoryContext } from '../../lib/memory-context.ts'
 import { loadRelevantMemoriesForTool } from '../../lib/memory-context.ts'
+import type { MemoryRow } from '../../lib/memory-store.ts'
 import { getPackage, listPackages } from '../../lib/packages-store.ts'
 import { reciprocalRankFusion } from '../../lib/rrf.ts'
 import { listSecrets } from '../../lib/secrets-store.ts'
+import type { SkillMeta } from '../../lib/skills-store.ts'
 import { getSkill, searchSkills, skillR2Key } from '../../lib/skills-store.ts'
 import { defineTool } from '../../lib/tool.ts'
 import type { FermiMCP } from '../index.ts'
@@ -331,6 +340,156 @@ async function searchSkillsLike(query: string, limit: number, env: Env): Promise
 	}))
 }
 
+// ---- knowledge principal (ISSUE-88): memory + skill of one namespace only ----
+
+function knowledgeMemoryMatch(r: MemoryRow, score: number): SearchMatch {
+	return {
+		id: `${r.id}:memory`,
+		type: 'memory',
+		name: `memory#${r.id}`,
+		title: r.body.slice(0, 80),
+		snippet: r.body,
+		score,
+		metadata: { kind: r.kind, pinned: !!r.pinned, created_at: r.created_at },
+	}
+}
+
+function knowledgeSkillMatch(s: SkillMeta, score: number): SearchMatch {
+	return {
+		id: `${s.slug}:skill`,
+		type: 'skill',
+		name: s.slug,
+		title: s.name,
+		snippet: s.description ?? '',
+		score,
+		metadata: {
+			version: s.version,
+			source: s.source,
+			usage_count: s.usage_count,
+			keywords: s.keywords,
+		},
+	}
+}
+
+async function knowledgeMemories(ns: string, ctx: MemoryContext, env: Env, limit = 5) {
+	const terms = [ctx.task, ctx.query, ...(ctx.entities ?? []), ...(ctx.constraints ?? [])]
+	const seen = new Set<number>()
+	const out: Array<MemoryRow & { matched_on: string }> = []
+	for (const t of terms) {
+		const trimmed = t?.trim()
+		if (!trimmed) continue
+		for (const row of await recallKnowledgeMemories(ns, trimmed, limit, env)) {
+			if (seen.has(row.id)) continue
+			seen.add(row.id)
+			out.push({ ...row, matched_on: trimmed })
+			if (out.length >= limit) return out
+		}
+	}
+	return out
+}
+
+/** The search response for a knowledge session: only its namespace's memories and skills. */
+async function knowledgeSearch(
+	ns: string,
+	args: {
+		entity?: string
+		query?: string
+		types?: string[]
+		limit: number
+		memoryContext?: MemoryContext
+	},
+	env: Env,
+): Promise<Record<string, unknown>> {
+	const startedAt = Date.now()
+	const memories = args.memoryContext
+		? await knowledgeMemories(ns, args.memoryContext, env)
+		: undefined
+
+	if (args.entity) {
+		const colon = args.entity.lastIndexOf(':')
+		const id = args.entity.slice(0, colon)
+		const type = colon < 0 ? '' : args.entity.slice(colon + 1)
+		let detail: SearchMatch | null = null
+		if (type === 'memory' && Number.isInteger(Number(id))) {
+			const row = await getKnowledgeMemory(ns, Number(id), env)
+			if (row) detail = knowledgeMemoryMatch(row, 1)
+		} else if (type === 'skill') {
+			const skill = await getKnowledgeSkill(ns, id, env)
+			if (skill) {
+				detail = knowledgeSkillMatch(skill, 1)
+				detail.metadata = {
+					keywords: skill.keywords,
+					allowed_tools: skill.allowed_tools,
+					version: skill.version,
+					source: skill.source,
+					origin_memory_id: skill.origin_memory_id,
+					usage_count: skill.usage_count,
+					r2_key: null,
+				}
+			}
+		}
+		return {
+			matches: detail ? [detail] : [],
+			offline: false,
+			warnings: detail ? [] : ['entity_not_found'],
+			guidance: [],
+			telemetry: {
+				durationMs: Date.now() - startedAt,
+				candidateCounts: { entity: detail ? 1 : 0 },
+			},
+			memories,
+		}
+	}
+
+	const allowedTypes = new Set(args.types ?? ['capability', 'memory', 'secret', 'skill'])
+	const query = args.query?.trim() ?? ''
+	const lim = args.limit
+	if (!query) {
+		return {
+			matches: [],
+			offline: false,
+			warnings: [],
+			guidance: ['Provide query or entity for ranked search'],
+			telemetry: { durationMs: Date.now() - startedAt, candidateCounts: {} },
+		}
+	}
+
+	const [skillHits, memoryHits] = await Promise.all([
+		allowedTypes.has('skill')
+			? searchKnowledgeSkills(ns, query, lim, env).then((hits) =>
+					hits.map((h) => knowledgeSkillMatch(h, h.score)),
+				)
+			: Promise.resolve([]),
+		allowedTypes.has('memory')
+			? recallKnowledgeMemories(ns, query, lim, env).then((rows) =>
+					rows.map((r) => knowledgeMemoryMatch(r, r.pinned ? 1 : 0.5)),
+				)
+			: Promise.resolve([]),
+	])
+	const byId = new Map([...skillHits, ...memoryHits].map((m) => [m.id, m]))
+	const matches: SearchMatch[] = reciprocalRankFusion([skillHits, memoryHits])
+		.map((f) => {
+			const m = byId.get(f.id) as SearchMatch
+			return { ...m, score: f.score * (TYPE_BOOST[m.type] ?? 1) }
+		})
+		.sort((a, b) => b.score - a.score)
+		.slice(0, lim)
+	return {
+		matches,
+		offline: false,
+		warnings: [],
+		guidance:
+			matches.length === 0
+				? [`No matches for "${query}". Try a different keyword or list with empty query.`]
+				: [],
+		telemetry: {
+			durationMs: Date.now() - startedAt,
+			candidateCounts: { skill_like: skillHits.length, memory: memoryHits.length },
+		},
+		memories,
+	}
+}
+
 async function searchConnectorsByName(query: string, env: Env): Promise<SearchMatch[]> {
 	const all = await listConnectors(env)
 	const q = query.toLowerCase()
@@ -433,6 +592,10 @@ export function registerSearchTool(agent: FermiMCP) {
 		risk: 'low',
 		mutates: false,
 		handler: async (args, env) => {
+			if (agent.knowledge) {
+				const res = await knowledgeSearch(agent.knowledge.namespace, args, env)
+				return { content: [{ type: 'text' as const, text: JSON.stringify(res) }] }
+			}
 			const startedAt = Date.now()
 			registerAllCapabilities()
 			const warnings: string[] = []
